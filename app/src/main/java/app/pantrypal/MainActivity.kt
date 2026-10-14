@@ -352,47 +352,110 @@ private fun PantryPalApp(
     }
 
     Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5),
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
-                        Text("PantryPal", fontWeight = FontWeight.ExtraBold)
-                        Text("Your recipes, your kitchen", style = MaterialTheme.typography.labelSmall)
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
+                            style = MaterialTheme.typography.titleLarge)
+                        Text("YOUR PERSONAL RECIPE BOX", color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                            style = MaterialTheme.typography.labelSmall, letterSpacing = androidx.compose.ui.unit.sp(1.2f))
                     }
                 },
-                actions = {
-                    TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Backup") }
-                    TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Restore") }
-                    TextButton(onClick = { showImport = true }, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Import") }
-                    TextButton(onClick = { editing = null; showForm = true }, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("+ Add") }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = PantryOrange)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5))
             )
         }
     ) { inset ->
-        Column(Modifier.fillMaxSize().padding(inset).padding(horizontal = 16.dp)) {
-            Spacer(Modifier.height(14.dp))
+        Column(
+            Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = PantryInk),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("YOUR NEXT FAVOURITE", color = PantryOrange, style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.sp(1.4f))
+                    Text("What are we\ncooking today?", color = androidx.compose.ui.graphics.Color.White,
+                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                    Text("Find something delicious, or keep your own recipes close at hand.",
+                        color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = { showRecipeSearch = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                        contentPadding = PaddingValues(vertical = 13.dp)
+                    ) {
+                        Text("Explore recipes online", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
             OutlinedTextField(
                 value = search, onValueChange = { search = it },
-                label = { Text("Search your recipes") }, singleLine = true,
-                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
-            )
-            Spacer(Modifier.height(8.dp))
-            OutlinedButton(
-                onClick = { showRecipeSearch = true },
+                label = { Text("Search your saved recipes") },
+                placeholder = { Text("Recipe name or ingredient") },
+                leadingIcon = { Text("⌕", style = MaterialTheme.typography.headlineSmall, color = PantryInk) },
+                singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(14.dp)
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PantryOrange,
+                    focusedLabelColor = PantryInk,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                )
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { editing = null; showForm = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) { Text("+ Add recipe", fontWeight = FontWeight.Bold) }
+                OutlinedButton(
+                    onClick = { showImport = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) { Text("Import from link") }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
+                    Text("Meal planner")
+                }
+                OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
+                    Text("Shopping list")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text("Find recipes online")
+                Text("${recipes.size} SAVED ${if (recipes.size == 1) "RECIPE" else "RECIPES"}",
+                    style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                    fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.sp(0.8f))
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                        Text("Backup", style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                        Text("Restore", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
             }
-            Spacer(Modifier.height(12.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f)) { Text("Meal planner") }
-                OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f)) { Text("Shopping list") }
-            }
-            Spacer(Modifier.height(8.dp))
-            Text("${recipes.size} saved ${if (recipes.size == 1) "recipe" else "recipes"}", style = MaterialTheme.typography.labelLarge)
-            Spacer(Modifier.height(8.dp))
+
             val visible = recipes.filter {
                 it.title.contains(search, true) || it.ingredients.contains(search, true)
             }
@@ -403,28 +466,37 @@ private fun PantryPalApp(
                     verticalArrangement = Arrangement.Center
                 ) {
                     Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
-                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
                     Spacer(Modifier.height(6.dp))
-                    Text(if (recipes.isEmpty()) "Add a recipe or import one from a website." else "Try another search.")
+                    Text(if (recipes.isEmpty()) "Add a recipe or import one from a website." else "Try another search.",
+                        color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                     Spacer(Modifier.height(16.dp))
-                    Button(onClick = { editing = null; showForm = true }) { Text("Add your first recipe") }
+                    Button(
+                        onClick = { editing = null; showForm = true },
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
+                    ) { Text("Add your first recipe") }
                 }
             } else {
-                LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(bottom = 24.dp)) {
+                LazyColumn(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    contentPadding = PaddingValues(bottom = 24.dp)
+                ) {
                     items(visible, key = { it.id }) { recipe ->
                         Card(
                             onClick = { selected = recipe },
                             shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFFBF2)),
+                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Column(Modifier.padding(16.dp)) {
-                                Text(recipe.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                                Text(recipe.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
                                 if (recipe.description.isNotBlank()) {
                                     Spacer(Modifier.height(4.dp))
-                                    Text(recipe.description, maxLines = 2)
+                                    Text(recipe.description, maxLines = 2, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                                 }
-                                Spacer(Modifier.height(6.dp))
+                                Spacer(Modifier.height(8.dp))
                                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     if (recipe.prepTime.isNotBlank()) Text("Prep ${recipe.prepTime}", style = MaterialTheme.typography.labelSmall)
                                     if (recipe.cookTime.isNotBlank()) Text("Cook ${recipe.cookTime}", style = MaterialTheme.typography.labelSmall)
