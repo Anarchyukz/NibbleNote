@@ -876,15 +876,15 @@ private fun ImportDialog(
                     OutlinedButton(
                         onClick = {
                             val cleanText = sharedText
-                                .replace(Regex("https?://\\\\S+", RegexOption.IGNORE_CASE), "")
-                                .replace(Regex("\\\\s+"), " ")
+                                .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "")
+                                .replace(Regex("\\s+"), " ")
                                 .trim()
                             val titleCandidate = cleanText.lineSequence()
                                 .map { it.trim().trim('-', '•', '|') }
                                 .firstOrNull { it.isNotBlank() }
                                 ?.take(80)
                             val source = address.ifBlank {
-                                Regex("https?://\\\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+                                Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
                             }
                             val socialName = when {
                                 source.contains("instagram.com", true) -> "Instagram"
