@@ -561,7 +561,7 @@ private fun PantryPalApp(
     if (showRecipeSearch) RecipeSearchDialog(
         onDismiss = { showRecipeSearch = false },
         onImport = { recipe ->
-            update(listOf(recipe) + recipes.filterNot { it.sourceUrl == recipe.sourceUrl && recipe.sourceUrl.isNotBlank() })
+            // Online search only opens a preview. Save only when the user taps Add to box.
             showRecipeSearch = false
             selected = recipe
         }
@@ -570,9 +570,15 @@ private fun PantryPalApp(
         recipe = editing,
         onDismiss = { showForm = false; editing = null },
         onSave = { recipe ->
-            val next = if (recipes.any { it.id == recipe.id }) recipes.map { if (it.id == recipe.id) recipe else it }
-                else listOf(recipe) + recipes
-            update(next)
+            val alreadySaved = recipes.any { it.id == recipe.id }
+            if (editing != null && !alreadySaved) {
+                // Editing an imported preview should return to preview; Add to box remains the save action.
+                selected = recipe
+            } else {
+                val next = if (alreadySaved) recipes.map { if (it.id == recipe.id) recipe else it }
+                    else listOf(recipe) + recipes
+                update(next)
+            }
             showForm = false
             editing = null
         }
@@ -583,7 +589,7 @@ private fun PantryPalApp(
         onDismiss = { showImport = false },
         onManual = { showImport = false; editing = null; showForm = true },
         onImport = { recipe ->
-            update(listOf(recipe) + recipes.filterNot { it.sourceUrl == recipe.sourceUrl && recipe.sourceUrl.isNotBlank() })
+            // Fetch and preview the recipe without saving it to the local box.
             showImport = false
             selected = recipe
         }
