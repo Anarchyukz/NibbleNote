@@ -205,7 +205,7 @@ private data class RecipeSearchResult(val title: String, val url: String)
 private class RecipeWebSearch {
     suspend fun search(query: String): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
-        val encoded = URLEncoder.encode("\${query.trim()} recipe", "UTF-8")
+        val encoded = URLEncoder.encode("${query.trim()} recipe", "UTF-8")
         val connection = (URL("https://html.duckduckgo.com/html/?q=$encoded").openConnection() as HttpURLConnection).apply {
             connectTimeout = 10000
             readTimeout = 12000
