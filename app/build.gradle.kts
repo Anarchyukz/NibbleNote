@@ -19,6 +19,39 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Release signing is enabled only when the GitHub Actions secrets are configured.
+    val signingStorePath = System.getenv("PANTRYPAL_KEYSTORE_PATH")
+    val signingStorePassword = System.getenv("PANTRYPAL_KEYSTORE_PASSWORD")
+    val signingKeyAlias = System.getenv("PANTRYPAL_KEY_ALIAS")
+    val signingKeyPassword = System.getenv("PANTRYPAL_KEY_PASSWORD")
+
+    signingConfigs {
+        if (!signingStorePath.isNullOrBlank() &&
+            !signingStorePassword.isNullOrBlank() &&
+            !signingKeyAlias.isNullOrBlank() &&
+            !signingKeyPassword.isNullOrBlank()
+        ) {
+            create("release") {
+                storeFile = file(signingStorePath)
+                storePassword = signingStorePassword
+                keyAlias = signingKeyAlias
+                keyPassword = signingKeyPassword
+            }
+        }
+    }
+    buildTypes {
+        getByName("release") {
+            if (!signingStorePath.isNullOrBlank() &&
+                !signingStorePassword.isNullOrBlank() &&
+                !signingKeyAlias.isNullOrBlank() &&
+                !signingKeyPassword.isNullOrBlank()
+            ) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = false
+        }
+    }
 }
 dependencies {
     implementation(platform("androidx.compose:compose-bom:2025.10.01"))
