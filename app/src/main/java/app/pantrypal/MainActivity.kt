@@ -22,6 +22,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -428,6 +429,7 @@ private fun PantryPalApp(
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
     var selected by remember { mutableStateOf<Recipe?>(null) }
+    val context = LocalContext.current
 
     fun update(next: List<Recipe>) {
         recipes = next
@@ -622,7 +624,16 @@ private fun PantryPalApp(
                         Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                             rowSites.forEach { site ->
                                 Card(
-                                    onClick = { selectedBrowseSite = site; showRecipeSearch = true },
+                                    onClick = {
+                                        val website = "https://${site.domain}"
+                                        try {
+                                            // Open the actual recipe website in the browser, rather than searching inside PantryPal.
+                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website)))
+                                        } catch (_: Exception) {
+                                            selectedBrowseSite = site
+                                            showRecipeSearch = true
+                                        }
+                                    },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(16.dp),
                                     colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
