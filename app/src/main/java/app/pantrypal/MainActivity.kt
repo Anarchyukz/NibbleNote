@@ -1,7 +1,10 @@
 package app.pantrypal
 
 import android.content.Context
+import android.net.Uri
 import android.os.Bundle
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -61,16 +64,22 @@ class RecipeStore(context: Context) {
         }
     } catch (_: Exception) { emptyList() }
 
+    fun backupJson(): String {
+        val array = JSONArray()
+        load().forEach { array.put(recipeToJson(it)) }
+        return JSONObject().put("format", "PantryPal backup").put("version", 1).put("recipes", array).toString(2)
+    }
+
+    fun restoreJson(json: String): List<Recipe> {
+        val root = JSONObject(json)
+        require(root.optString("format") == "PantryPal backup") { "This file is not a PantryPal backup." }
+        val array = root.optJSONArray("recipes") ?: throw IllegalArgumentException("The backup contains no recipe list.")
+        return (0 until array.length()).mapNotNull { i -> array.optJSONObject(i)?.let(::recipeFromJson) }
+    }
+
     fun save(recipes: List<Recipe>) {
         val array = JSONArray()
-        recipes.forEach { r ->
-            array.put(JSONObject().apply {
-                put("id", r.id); put("title", r.title); put("description", r.description)
-                put("ingredients", r.ingredients); put("instructions", r.instructions)
-                put("sourceUrl", r.sourceUrl); put("prepTime", r.prepTime)
-                put("cookTime", r.cookTime); put("servings", r.servings)
-            })
-        }
+        recipes.forEach { r -> array.put(recipeToJson(r)) }
         prefs.edit().putString("recipes", array.toString()).apply()
     }
 }
@@ -159,13 +168,56 @@ private class RecipeImporter {
     }
 }
 
+private fun recipeToJson(r: Recipe) = JSONObject().apply {
+    put("id", r.id); put("title", r.title); put("description", r.description)
+    put("ingredients", r.ingredients); put("instructions", r.instructions)
+    put("sourceUrl", r.sourceUrl); put("prepTime", r.prepTime)
+    put("cookTime", r.cookTime); put("servings", r.servings)
+}
+
+private fun recipeFromJson(o: JSONObject) = Recipe(
+    id = o.optString("id", UUID.randomUUID().toString()),
+    title = o.optString("title", "Untitled recipe"),
+    description = o.optString("description"), ingredients = o.optString("ingredients"),
+    instructions = o.optString("instructions"), sourceUrl = o.optString("sourceUrl"),
+    prepTime = o.optString("prepTime"), cookTime = o.optString("cookTime"),
+    servings = o.optString("servings", "2")
+)
+
 class MainActivity : ComponentActivity() {
+    private lateinit var store: RecipeStore
+
+    private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        if (uri != null) try {
+            contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(store.backupJson()) }
+                ?: throw IllegalStateException("Could not write the backup file.")
+            Toast.makeText(this, "PantryPal backup saved", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val openBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) try {
+            val recipes = contentResolver.openInputStream(uri)?.bufferedReader()?.use { store.restoreJson(it.readText()) }
+                ?: throw IllegalStateException("Could not read the selected file.")
+            val merged = (store.load().associateBy { it.id } + recipes.associateBy { it.id }).values.toList()
+            store.save(merged)
+            Toast.makeText(this, "Restored ${recipes.size} recipes", Toast.LENGTH_LONG).show()
+            recreate()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val store = RecipeStore(this)
+        store = RecipeStore(this)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
-                PantryPalApp(store.load(), store::save)
+                PantryPalApp(store.load(), store::save,
+                    onBackup = { createBackup.launch("PantryPal-backup.json") },
+                    onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) })
             }
         }
     }
@@ -173,7 +225,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit) {
+private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit, onBackup: () -> Unit, onRestore: () -> Unit) {
     var recipes by remember { mutableStateOf(initialRecipes) }
     var search by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Recipe?>(null) }
@@ -196,6 +248,8 @@ private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -
                     }
                 },
                 actions = {
+                    TextButton(onClick = onBackup) { Text("Backup") }
+                    TextButton(onClick = onRestore) { Text("Restore") }
                     TextButton(onClick = { showImport = true }) { Text("Import") }
                     TextButton(onClick = { editing = null; showForm = true }) { Text("+ Add") }
                 },
