@@ -206,34 +206,58 @@ private class RecipeWebSearch {
     suspend fun search(query: String): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
         val encoded = URLEncoder.encode("${query.trim()} recipe", "UTF-8")
-        val connection = (URL("https://html.duckduckgo.com/html/?q=$encoded").openConnection() as HttpURLConnection).apply {
-            connectTimeout = 10000
-            readTimeout = 12000
-            instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
-            setRequestProperty("Accept-Language", "en-GB,en;q=0.9")
+        val endpoints = listOf(
+            "https://html.duckduckgo.com/html/?q=$encoded",
+            "https://lite.duckduckgo.com/lite/?q=$encoded"
+        )
+        var lastError: Exception? = null
+        for (endpoint in endpoints) {
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 10000
+                readTimeout = 12000
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
+                setRequestProperty("Accept-Language", "en-GB,en;q=0.9")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            }
+            try {
+                val status = connection.responseCode
+                if (status !in 200..299) throw IllegalStateException("Search provider returned HTTP $status.")
+                val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                val anchors = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
+                val results = anchors.mapNotNull { match ->
+                    val attributes = match.groupValues[1]
+                    val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
+                        .find(attributes)?.groupValues?.get(1).orEmpty()
+                    if (!classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
+                    val rawHref = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
+                        .find(attributes)?.groupValues?.get(1) ?: return@mapNotNull null
+                    var link = decodeHtml(rawHref.trim())
+                    if (link.startsWith("//")) link = "https:$link"
+                    if (link.contains("duckduckgo.com/l/?")) {
+                        val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) link = URLDecoder.decode(target, "UTF-8")
+                    }
+                    val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
+                        .replace(Regex("""\s+"""), " ").trim()
+                    if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
+                        link.contains("duckduckgo.com") || title.isBlank()) {
+                        return@mapNotNull null
+                    }
+                    RecipeSearchResult(title, link)
+                }.distinctBy { it.url }.take(12).toList()
+                if (results.isNotEmpty()) return@withContext results
+                lastError = IllegalStateException("The search page loaded, but no recipe results could be read.")
+            } catch (e: Exception) {
+                lastError = e
+            } finally {
+                connection.disconnect()
+            }
         }
-        try {
-            val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val anchors = Regex("""(?is)<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>""").findAll(html)
-            val results = anchors.mapNotNull { match ->
-                var link = decodeHtml(match.groupValues[1])
-                if (link.startsWith("//")) link = "https:$link"
-                if (link.contains("duckduckgo.com/l/?")) {
-                    val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
-                    if (target != null) link = URLDecoder.decode(target, "UTF-8")
-                }
-                val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), "")).trim()
-                if ((!link.startsWith("https://") && !link.startsWith("http://")) || link.contains("duckduckgo.com") || title.isBlank()) {
-                    return@mapNotNull null
-                }
-                RecipeSearchResult(title, link)
-            }.distinctBy { it.url }.take(12).toList()
-            if (results.isEmpty()) throw IllegalStateException("No search results were returned. Try another search or import a recipe URL directly.")
-            results
-        } finally {
-            connection.disconnect()
-        }
+        throw IllegalStateException(
+            lastError?.message ?: "Online search failed. Try another search or import a recipe URL directly.",
+            lastError
+        )
     }
 
     private fun decodeHtml(value: String): String = value
@@ -244,7 +268,6 @@ private class RecipeWebSearch {
         .replace("&lt;", "<", ignoreCase = true)
         .replace("&gt;", ">", ignoreCase = true)
 }
-
 private fun recipeToJson(r: Recipe) = JSONObject().apply {
     put("id", r.id); put("title", r.title); put("description", r.description)
     put("ingredients", r.ingredients); put("instructions", r.instructions)
@@ -338,10 +361,10 @@ private fun PantryPalApp(
                     }
                 },
                 actions = {
-                    TextButton(onClick = onBackup) { Text("Backup") }
-                    TextButton(onClick = onRestore) { Text("Restore") }
-                    TextButton(onClick = { showImport = true }) { Text("Import") }
-                    TextButton(onClick = { editing = null; showForm = true }) { Text("+ Add") }
+                    TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Backup") }
+                    TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Restore") }
+                    TextButton(onClick = { showImport = true }, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("Import") }
+                    TextButton(onClick = { editing = null; showForm = true }, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) { Text("+ Add") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PantryOrange)
             )
