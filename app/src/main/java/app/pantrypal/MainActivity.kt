@@ -594,6 +594,10 @@ private fun PantryPalApp(
             onDismiss = { selected = null },
             onImportAnother = { selected = null; showImport = true },
             onEdit = { editing = recipe; selected = null; showForm = true },
+            onAdd = {
+                update(listOf(recipe) + recipes.filterNot { it.id == recipe.id })
+                selected = null
+            },
             onDelete = {
                 update(recipes.filterNot { it.id == recipe.id })
                 val nextPlan = mealPlan.filterNot { it.recipeId == recipe.id }
@@ -789,7 +793,7 @@ private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit
 }
 
 @Composable
-private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onAdd: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     var cookingMode by remember(recipe.id) { mutableStateOf(false) }
     var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
     val ingredients = remember(recipe.ingredients, servings, recipe.servings) {
@@ -975,11 +979,12 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
                         contentPadding = PaddingValues(horizontal = 5.dp),
                         modifier = Modifier.weight(0.7f)
                     ) { Text("Delete", maxLines = 1, softWrap = false) }
-                    TextButton(
-                        onClick = onDismiss,
-                        contentPadding = PaddingValues(horizontal = 5.dp),
-                        modifier = Modifier.weight(0.65f)
-                    ) { Text("Close", maxLines = 1, softWrap = false) }
+                    Button(
+                        onClick = onAdd,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1.0f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Add to box", maxLines = 1, softWrap = false) }
                     Button(
                         onClick = onEdit,
                         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
