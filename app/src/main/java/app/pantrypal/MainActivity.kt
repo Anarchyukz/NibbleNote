@@ -865,16 +865,47 @@ private fun ImportDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(if (sharedText.isNotBlank())
-                    "Shared from another app. If a recipe link was included, PantryPal has filled it in below. Tap Import to try saving it."
+                    "Shared from another app. PantryPal will try the link first, but Instagram and TikTok often hide recipe details from automatic import."
                     else "Paste a recipe webpage URL. PantryPal looks for standard structured recipe data.")
                 if (sharedText.isNotBlank() && address.isBlank()) {
-                    Text("This share didn't include a web link. Open the original post, copy its recipe text, then choose Enter manually in PantryPal.",
+                    Text("No web link was included. You can still create a recipe draft from the shared caption, or copy the caption from the original post.",
                         style = MaterialTheme.typography.bodySmall)
                 }
                 OutlinedTextField(address, { address = it; error = null }, label = { Text("Recipe webpage URL") }, singleLine = true)
+                if (sharedText.isNotBlank()) {
+                    OutlinedButton(
+                        onClick = {
+                            val cleanText = sharedText
+                                .replace(Regex("https?://\\\\S+", RegexOption.IGNORE_CASE), "")
+                                .replace(Regex("\\\\s+"), " ")
+                                .trim()
+                            val titleCandidate = cleanText.lineSequence()
+                                .map { it.trim().trim('-', '•', '|') }
+                                .firstOrNull { it.isNotBlank() }
+                                ?.take(80)
+                            val source = address.ifBlank {
+                                Regex("https?://\\\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+                            }
+                            val socialName = when {
+                                source.contains("instagram.com", true) -> "Instagram"
+                                source.contains("tiktok.com", true) -> "TikTok"
+                                else -> "shared post"
+                            }
+                            onImport(
+                                Recipe(
+                                    title = titleCandidate?.takeIf { it.isNotBlank() } ?: "Recipe from $socialName",
+                                    description = "Draft created from shared post text. Check the original post for any missing ingredients or steps.",
+                                    instructions = sharedText.trim(),
+                                    sourceUrl = source
+                                )
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("Create recipe draft from shared text") }
+                }
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Text("Some sites block imports or do not publish recipe data.", style = MaterialTheme.typography.bodySmall)
+                Text("If a social post cannot be read automatically, share its caption/text to PantryPal or paste the caption into a draft.", style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
