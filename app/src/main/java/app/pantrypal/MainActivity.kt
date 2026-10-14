@@ -207,12 +207,24 @@ private class RecipeImporter {
     }
 }
 
+private data class BrowseSite(val name: String, val domain: String, val emoji: String)
+
+private val browseSites = listOf(
+    BrowseSite("BBC Good Food", "bbcgoodfood.com", "🍲"),
+    BrowseSite("Recipe Rebel", "thereciperebel.com", "🥘"),
+    BrowseSite("Allrecipes", "allrecipes.com", "🍝"),
+    BrowseSite("Jamie Oliver", "jamieoliver.com", "🍋"),
+    BrowseSite("RecipeTin Eats", "recipetineats.com", "🍜"),
+    BrowseSite("Simply Recipes", "simplyrecipes.com", "🥗")
+)
+
 private data class RecipeSearchResult(val title: String, val url: String)
 
 private class RecipeWebSearch {
-    suspend fun search(query: String): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
+    suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
-        val encoded = URLEncoder.encode("${query.trim()} recipe", "UTF-8")
+        val sitePrefix = siteDomain?.takeIf { it.isNotBlank() }?.let { "site:$it " }.orEmpty()
+        val encoded = URLEncoder.encode("${sitePrefix}${query.trim()} recipe", "UTF-8")
         val endpoints = listOf(
             "https://html.duckduckgo.com/html/?q=$encoded",
             "https://lite.duckduckgo.com/lite/?q=$encoded"
@@ -387,6 +399,7 @@ private fun PantryPalApp(
     var showForm by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
     var showRecipeSearch by remember { mutableStateOf(false) }
+    var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
     var selected by remember { mutableStateOf<Recipe?>(null) }
 
     fun update(next: List<Recipe>) {
@@ -502,30 +515,31 @@ private fun PantryPalApp(
             val visible = recipes.filter {
                 it.title.contains(search, true) || it.ingredients.contains(search, true)
             }
-            if (visible.isEmpty()) {
-                Column(
-                    Modifier.fillMaxWidth().weight(1f),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
-                        style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
-                    Spacer(Modifier.height(6.dp))
-                    Text(if (recipes.isEmpty()) "Add a recipe or import one from a website." else "Try another search.",
-                        color = androidx.compose.ui.graphics.Color(0xFF6B7280))
-                    Spacer(Modifier.height(16.dp))
-                    Button(
-                        onClick = { editing = null; showForm = true },
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
-                    ) { Text("Add your first recipe") }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                    contentPadding = PaddingValues(bottom = 24.dp)
-                ) {
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(top = 2.dp, bottom = 24.dp)
+            ) {
+                if (visible.isEmpty()) {
+                    item {
+                        Column(
+                            Modifier.fillMaxWidth().padding(vertical = 26.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
+                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
+                            Spacer(Modifier.height(6.dp))
+                            Text(if (recipes.isEmpty()) "Browse below or add a recipe to get started." else "Try another search.",
+                                color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = { editing = null; showForm = true },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
+                            ) { Text("Add a recipe") }
+                        }
+                    }
+                } else {
                     items(visible, key = { it.id }) { recipe ->
                         Card(
                             onClick = { selected = recipe },
@@ -549,6 +563,42 @@ private fun PantryPalApp(
                         }
                     }
                 }
+
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 14.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("BROWSE RECIPES", style = MaterialTheme.typography.labelMedium,
+                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
+                            Text("Popular recipe websites", style = MaterialTheme.typography.titleLarge,
+                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
+                            Text("Choose a site, search for a dish, then preview before adding it to your box.",
+                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                        }
+                        listOf(browseSites.take(3), browseSites.drop(3)).forEach { rowSites ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                rowSites.forEach { site ->
+                                    Card(
+                                        onClick = { selectedBrowseSite = site; showRecipeSearch = true },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
+                                    ) {
+                                        Column(
+                                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
+                                            Text(site.name, style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold, color = PantryInk, maxLines = 2,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }
@@ -559,10 +609,12 @@ private fun PantryPalApp(
     }
     if (showShopping) ShoppingListDialog(recipes, mealPlan, { showShopping = false })
     if (showRecipeSearch) RecipeSearchDialog(
-        onDismiss = { showRecipeSearch = false },
+        site = selectedBrowseSite,
+        onDismiss = { showRecipeSearch = false; selectedBrowseSite = null },
         onImport = { recipe ->
             // Online search only opens a preview. Save only when the user taps Add to box.
             showRecipeSearch = false
+            selectedBrowseSite = null
             selected = recipe
         }
     )
@@ -696,8 +748,8 @@ private fun ImportDialog(
 }
 
 @Composable
-private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
-    var query by remember { mutableStateOf("") }
+private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
+    var query by remember(site?.domain) { mutableStateOf("") }
     var results by remember { mutableStateOf<List<RecipeSearchResult>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var importingUrl by remember { mutableStateOf<String?>(null) }
@@ -706,18 +758,19 @@ private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit
 
     AlertDialog(
         onDismissRequest = { if (!searching && importingUrl == null) onDismiss() },
-        title = { Text("Search recipes") },
+        title = { Text(site?.let { "Browse ${it.name}" } ?: "Search recipes") },
         text = {
             Column(
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text("Search the web for recipes from popular cooking websites, then import a result into PantryPal.")
+                Text(site?.let { "Search ${it.name} for a dish or ingredient. Results open as a preview and are only saved when you tap Add to box." }
+                    ?: "Search the web for recipes from popular cooking websites, then preview a result before adding it to PantryPal.")
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     label = { Text("Dish or ingredient") },
-                    placeholder = { Text("e.g. chicken curry") },
+                    placeholder = { Text(if (site == null) "e.g. chicken curry" else "Search ${site.name}, e.g. chicken curry") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -728,7 +781,7 @@ private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit
                         error = null
                         results = emptyList()
                         scope.launch {
-                            try { results = RecipeWebSearch().search(query) }
+                            try { results = RecipeWebSearch().search(query, site?.domain) }
                             catch (e: Exception) { error = e.message ?: "Search failed. Try again." }
                             finally { searching = false }
                         }
@@ -783,13 +836,13 @@ private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit
                                         }
                                     },
                                     modifier = Modifier.fillMaxWidth()
-                                ) { Text(if (importingUrl == result.url) "Importing…" else "Import recipe") }
+                                ) { Text(if (importingUrl == result.url) "Loading preview…" else "Preview recipe") }
                             }
                         }
                     }
                 }
                 Text(
-                    "Importing works best on pages that publish recipe ingredients and instructions as structured data. Some sites may block imports.",
+                    "PantryPal reads recipe details where the website makes them available. Some sites block importing; recipes are not saved until you tap Add to box.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
