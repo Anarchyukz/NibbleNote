@@ -210,7 +210,7 @@ private class RecipeImporter {
         val nutrition = o.optJSONObject("nutrition")
         fun nutritionValue(key: String): String {
             val raw = nutrition?.optString(key)?.takeIf { it.isNotBlank() && it != "null" } ?: return ""
-            val number = Regex("""-?\\d+(?:[.,]\\d+)?""").find(raw)?.value?.replace(',', '.') ?: return ""
+            val number = Regex("""-?\d+(?:[.,]\d+)?""").find(raw)?.value?.replace(',', '.') ?: return ""
             val parsed = number.toDoubleOrNull() ?: return ""
             return if (parsed % 1.0 == 0.0) parsed.toInt().toString() else String.format(java.util.Locale.UK, "%.1f", parsed)
         }
