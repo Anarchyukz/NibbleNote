@@ -425,8 +425,9 @@ private fun PantryPalApp(
         }
     ) { inset ->
         Column(
-            Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp),
-                     Card(
+            Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp)
+        ) {
+            Card(
                 shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = PantryInk),
                 modifier = Modifier.fillMaxWidth()
@@ -642,9 +643,6 @@ private fun PantryPalApp(
                             shape = RoundedCornerShape(14.dp),
                             contentPadding = PaddingValues(vertical = 12.dp)
                         ) { Text("Search all websites") }
-                    }
-                }
-            }          }
                     }
                 }
             }
