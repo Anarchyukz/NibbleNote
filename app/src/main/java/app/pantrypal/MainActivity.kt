@@ -279,15 +279,15 @@ private class RecipeWebSearch {
         try {
             if (connection.responseCode !in 200..299) return@withContext null
             val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val metaTags = Regex("""(?is)<meta\\b[^>]*>""").findAll(html).map { it.value }.toList()
+            val metaTags = Regex("""(?is)<meta\b[^>]*>""").findAll(html).map { it.value }.toList()
             fun attribute(tag: String, name: String): String? =
-                Regex("""(?is)\\b$name\\s*=\\s*["']([^"']+)["']""").find(tag)?.groupValues?.get(1)
+                Regex("""(?is)\b$name\s*=\s*["']([^"']+)["']""").find(tag)?.groupValues?.get(1)
             val image = metaTags.firstNotNullOfOrNull { tag ->
                 val property = (attribute(tag, "property") ?: attribute(tag, "name")).orEmpty().lowercase()
                 if (property in listOf("og:image", "og:image:url", "twitter:image", "twitter:image:src")) {
                     attribute(tag, "content")?.trim()?.takeIf { it.isNotBlank() }
                 } else null
-            } ?: Regex("""(?is)["']image["']\\s*:\\s*["']([^"']+)["']""")
+            } ?: Regex("""(?is)["']image["']\s*:\s*["']([^"']+)["']""")
                 .find(html)?.groupValues?.get(1)
             val decoded = image?.replace("&amp;", "&", ignoreCase = true)
                 ?.replace("&#x2F;", "/", ignoreCase = true)?.trim()
