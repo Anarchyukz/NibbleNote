@@ -20,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -360,7 +361,7 @@ private fun PantryPalApp(
                         Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
                             style = MaterialTheme.typography.titleLarge)
                         Text("YOUR PERSONAL RECIPE BOX", color = androidx.compose.ui.graphics.Color(0xFF6B7280),
-                            style = MaterialTheme.typography.labelSmall, letterSpacing = androidx.compose.ui.unit.sp(1.2f))
+                            style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2f.sp)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5))
@@ -445,7 +446,7 @@ private fun PantryPalApp(
             ) {
                 Text("${recipes.size} SAVED ${if (recipes.size == 1) "RECIPE" else "RECIPES"}",
                     style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color(0xFF6B7280),
-                    fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.sp(0.8f))
+                    fontWeight = FontWeight.Bold, letterSpacing = 0.8f.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
                         Text("Backup", style = MaterialTheme.typography.labelMedium)
