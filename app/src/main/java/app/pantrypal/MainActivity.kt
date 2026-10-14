@@ -225,7 +225,9 @@ private class RecipeWebSearch {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
         val sitePrefix = siteDomain?.takeIf { it.isNotBlank() }?.let { "site:$it " }.orEmpty()
         val encoded = URLEncoder.encode("${sitePrefix}${query.trim()} recipe", "UTF-8")
+        // Search providers can change their markup or block automated requests, so use a fallback.
         val endpoints = listOf(
+            "https://www.bing.com/search?q=$encoded&setlang=en-GB",
             "https://html.duckduckgo.com/html/?q=$encoded",
             "https://lite.duckduckgo.com/lite/?q=$encoded"
         )
@@ -243,13 +245,19 @@ private class RecipeWebSearch {
                 val status = connection.responseCode
                 if (status !in 200..299) throw IllegalStateException("Search provider returned HTTP $status.")
                 val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                val anchors = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
+                // Bing organic results use h2 links; DuckDuckGo uses result-link classes.
+                val isBing = endpoint.contains("bing.com")
+                val anchors = if (isBing) {
+                    Regex("""(?is)<h2\\b[^>]*>\\s*<a\\b([^>]*)>(.*?)</a>""").findAll(html)
+                } else {
+                    Regex("""(?is)<a\\b([^>]*)>(.*?)</a>""").findAll(html)
+                }
                 val results = anchors.mapNotNull { match ->
                     val attributes = match.groupValues[1]
-                    val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
+                    val classes = Regex("""(?is)\\bclass\\s*=\\s*["']([^"']*)["']""")
                         .find(attributes)?.groupValues?.get(1).orEmpty()
-                    if (!classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
-                    val rawHref = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
+                    if (!isBing && !classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
+                    val rawHref = Regex("""(?is)\\bhref\\s*=\\s*["']([^"']+)["']""")
                         .find(attributes)?.groupValues?.get(1) ?: return@mapNotNull null
                     var link = decodeHtml(rawHref.trim())
                     if (link.startsWith("//")) link = "https:$link"
@@ -260,7 +268,8 @@ private class RecipeWebSearch {
                     val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
                         .replace(Regex("""\s+"""), " ").trim()
                     if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
-                        link.contains("duckduckgo.com") || title.isBlank()) {
+                        link.contains("duckduckgo.com") || link.contains("bing.com") ||
+                        link.contains("microsoft.com") || title.isBlank()) {
                         return@mapNotNull null
                     }
                     RecipeSearchResult(title, link)
