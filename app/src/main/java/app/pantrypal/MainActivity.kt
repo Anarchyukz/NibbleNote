@@ -27,6 +27,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import java.net.URLDecoder
+import java.net.URLEncoder
 import java.util.UUID
 
 private val PantryOrange = androidx.compose.ui.graphics.Color(0xFFF59E0B)
@@ -198,6 +200,51 @@ private class RecipeImporter {
     }
 }
 
+private data class RecipeSearchResult(val title: String, val url: String)
+
+private class RecipeWebSearch {
+    suspend fun search(query: String): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
+        require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
+        val encoded = URLEncoder.encode("\${query.trim()} recipe", "UTF-8")
+        val connection = (URL("https://html.duckduckgo.com/html/?q=$encoded").openConnection() as HttpURLConnection).apply {
+            connectTimeout = 10000
+            readTimeout = 12000
+            instanceFollowRedirects = true
+            setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
+            setRequestProperty("Accept-Language", "en-GB,en;q=0.9")
+        }
+        try {
+            val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val anchors = Regex("""(?is)<a[^>]*class=["'][^"']*result__a[^"']*["'][^>]*href=["']([^"']+)["'][^>]*>(.*?)</a>""").findAll(html)
+            val results = anchors.mapNotNull { match ->
+                var link = decodeHtml(match.groupValues[1])
+                if (link.startsWith("//")) link = "https:$link"
+                if (link.contains("duckduckgo.com/l/?")) {
+                    val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
+                    if (target != null) link = URLDecoder.decode(target, "UTF-8")
+                }
+                val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), "")).trim()
+                if ((!link.startsWith("https://") && !link.startsWith("http://")) || link.contains("duckduckgo.com") || title.isBlank()) {
+                    return@mapNotNull null
+                }
+                RecipeSearchResult(title, link)
+            }.distinctBy { it.url }.take(12).toList()
+            if (results.isEmpty()) throw IllegalStateException("No search results were returned. Try another search or import a recipe URL directly.")
+            results
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun decodeHtml(value: String): String = value
+        .replace("&amp;", "&", ignoreCase = true)
+        .replace("&quot;", "\"", ignoreCase = true)
+        .replace("&#39;", "'", ignoreCase = true)
+        .replace("&#x27;", "'", ignoreCase = true)
+        .replace("&lt;", "<", ignoreCase = true)
+        .replace("&gt;", ">", ignoreCase = true)
+}
+
 private fun recipeToJson(r: Recipe) = JSONObject().apply {
     put("id", r.id); put("title", r.title); put("description", r.description)
     put("ingredients", r.ingredients); put("instructions", r.instructions)
@@ -273,6 +320,7 @@ private fun PantryPalApp(
     var editing by remember { mutableStateOf<Recipe?>(null) }
     var showForm by remember { mutableStateOf(false) }
     var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
+    var showRecipeSearch by remember { mutableStateOf(false) }
     var selected by remember { mutableStateOf<Recipe?>(null) }
 
     fun update(next: List<Recipe>) {
@@ -293,6 +341,7 @@ private fun PantryPalApp(
                     TextButton(onClick = onBackup) { Text("Backup") }
                     TextButton(onClick = onRestore) { Text("Restore") }
                     TextButton(onClick = { showImport = true }) { Text("Import") }
+                    TextButton(onClick = { showRecipeSearch = true }) { Text("Search") }
                     TextButton(onClick = { editing = null; showForm = true }) { Text("+ Add") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PantryOrange)
@@ -364,6 +413,14 @@ private fun PantryPalApp(
         persistPlan(next)
     }
     if (showShopping) ShoppingListDialog(recipes, mealPlan, { showShopping = false })
+    if (showRecipeSearch) RecipeSearchDialog(
+        onDismiss = { showRecipeSearch = false },
+        onImport = { recipe ->
+            update(listOf(recipe) + recipes.filterNot { it.sourceUrl == recipe.sourceUrl && recipe.sourceUrl.isNotBlank() })
+            showRecipeSearch = false
+            selected = recipe
+        }
+    )
     if (showForm) RecipeFormDialog(
         recipe = editing,
         onDismiss = { showForm = false; editing = null },
@@ -480,6 +537,85 @@ private fun ImportDialog(
                 TextButton(enabled = !loading, onClick = onDismiss) { Text("Cancel") }
             }
         }
+    )
+}
+
+@Composable
+private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<RecipeSearchResult>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var importingUrl by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!searching && importingUrl == null) onDismiss() },
+        title = { Text("Search recipes") },
+        text = {
+            Column(
+                Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text("Search the web for recipes from popular cooking websites, then import a result into PantryPal.")
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Dish or ingredient") },
+                    placeholder = { Text("e.g. chicken curry") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    enabled = query.isNotBlank() && !searching && importingUrl == null,
+                    onClick = {
+                        searching = true
+                        error = null
+                        results = emptyList()
+                        scope.launch {
+                            try { results = RecipeWebSearch().search(query) }
+                            catch (e: Exception) { error = e.message ?: "Search failed. Try again." }
+                            finally { searching = false }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (searching) "Searching…" else "Search the web") }
+                if (searching || importingUrl != null) LinearProgressIndicator(Modifier.fillMaxWidth())
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                results.forEach { result ->
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFFBF2))
+                    ) {
+                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Text(result.title, fontWeight = FontWeight.Bold)
+                            Text(
+                                Uri.parse(result.url).host.orEmpty().removePrefix("www."),
+                                style = MaterialTheme.typography.labelSmall
+                            )
+                            Button(
+                                enabled = importingUrl == null && !searching,
+                                onClick = {
+                                    importingUrl = result.url
+                                    error = null
+                                    scope.launch {
+                                        try { onImport(RecipeImporter().import(result.url)) }
+                                        catch (e: Exception) { error = e.message ?: "Could not import this recipe. Try importing its URL directly." }
+                                        finally { importingUrl = null }
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) { Text(if (importingUrl == result.url) "Importing…" else "Import recipe") }
+                        }
+                    }
+                }
+                Text(
+                    "Importing works best on pages that publish recipe ingredients and instructions as structured data. Some sites may block imports.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = { TextButton(enabled = importingUrl == null && !searching, onClick = onDismiss) { Text("Close") } }
     )
 }
 
