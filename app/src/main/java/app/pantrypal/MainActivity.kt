@@ -227,8 +227,7 @@ private class RecipeWebSearch {
         val encoded = URLEncoder.encode("${sitePrefix}${query.trim()} recipe", "UTF-8")
         val endpoints = listOf(
             "https://html.duckduckgo.com/html/?q=$encoded",
-            "https://lite.duckduckgo.com/lite/?q=$encoded",
-            "https://www.google.com/search?q=$encoded"
+            "https://lite.duckduckgo.com/lite/?q=$encoded"
         )
         var lastError: Exception? = null
         for (endpoint in endpoints) {
@@ -236,55 +235,38 @@ private class RecipeWebSearch {
                 connectTimeout = 10000
                 readTimeout = 12000
                 instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14; Pixel 9 Pro XL) AppleWebKit/537.36 Chrome/129.0.0.0 Mobile Safari/537.36")
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
                 setRequestProperty("Accept-Language", "en-GB,en;q=0.9")
-                setRequestProperty("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
             }
             try {
                 val status = connection.responseCode
                 if (status !in 200..299) throw IllegalStateException("Search provider returned HTTP $status.")
                 val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                val anchors = Regex("""(?is)<a\\b([^>]*)>(.*?)</a>""").findAll(html)
+                val anchors = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
                 val results = anchors.mapNotNull { match ->
                     val attributes = match.groupValues[1]
-                    val classes = Regex("""(?is)\\bclass\\s*=\\s*["']([^"']*)["']""")
+                    val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
                         .find(attributes)?.groupValues?.get(1).orEmpty()
-                    val rawHref = Regex("""(?is)\\bhref\\s*=\\s*["']([^"']+)["']""")
+                    if (!classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
+                    val rawHref = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
                         .find(attributes)?.groupValues?.get(1) ?: return@mapNotNull null
                     var link = decodeHtml(rawHref.trim())
                     if (link.startsWith("//")) link = "https:$link"
-                    try {
-                        val parsedLink = URL(link)
-                        val host = parsedLink.host.lowercase().removePrefix("www.")
-                        if (host.endsWith("duckduckgo.com") && parsedLink.path == "/l/") {
-                            val target = parsedLink.query?.split("&")?.firstOrNull { it.startsWith("uddg=") }
-                                ?.substringAfter("uddg=")
-                            if (target != null) link = URLDecoder.decode(target, "UTF-8")
-                        } else if (host == "google.com" || host == "www.google.com") {
-                            val target = parsedLink.query?.split("&")?.firstOrNull { it.startsWith("q=") || it.startsWith("url=") }
-                                ?.substringAfter("=")
-                            if (parsedLink.path == "/url" && target != null) link = URLDecoder.decode(target, "UTF-8")
-                        }
-                    } catch (_: Exception) { return@mapNotNull null }
+                    if (link.contains("duckduckgo.com/l/?")) {
+                        val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) link = URLDecoder.decode(target, "UTF-8")
+                    }
                     val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
-                        .replace(Regex("""\\s+"""), " ").trim()
-                    val validWebUrl = link.startsWith("https://") || link.startsWith("http://")
-                    val host = try { URL(link).host.lowercase().removePrefix("www.") } catch (_: Exception) { "" }
-                    val isSearchProvider = host == "google.com" || host.endsWith(".google.com") ||
-                        host == "duckduckgo.com" || host.endsWith(".duckduckgo.com")
-                    val matchesSite = siteDomain.isNullOrBlank() || host == siteDomain || host.endsWith(".$siteDomain")
-                    val hasResultClass = classes.contains("result__a") || classes.contains("result-link") ||
-                        classes.contains("MjjYud") || classes.contains("LC20lb")
-                    val plausibleResult = hasResultClass || (host.isNotBlank() && !isSearchProvider &&
-                        (siteDomain != null || title.contains("recipe", true) ||
-                            link.substringAfter(host).contains("/") && title.length > 8))
-                    if (!validWebUrl || isSearchProvider || !matchesSite || !plausibleResult || title.isBlank()) {
+                        .replace(Regex("""\s+"""), " ").trim()
+                    if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
+                        link.contains("duckduckgo.com") || title.isBlank()) {
                         return@mapNotNull null
                     }
                     RecipeSearchResult(title, link)
                 }.distinctBy { it.url }.take(12).toList()
                 if (results.isNotEmpty()) return@withContext results
-                lastError = IllegalStateException("The search page loaded, but its results could not be read.")
+                lastError = IllegalStateException("The search page loaded, but no recipe results could be read.")
             } catch (e: Exception) {
                 lastError = e
             } finally {
@@ -292,6 +274,894 @@ private class RecipeWebSearch {
             }
         }
         throw IllegalStateException(
-            lastError?.message ?: "Online search failed. Try again or import a recipe URL directly.",
+            lastError?.message ?: "Online search failed. Try another search or import a recipe URL directly.",
             lastError
         )
+    }
+
+
+    suspend fun fetchImage(pageUrl: String): String? = withContext(Dispatchers.IO) {
+        val connection = try {
+            (URL(pageUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4500
+                readTimeout = 4500
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            }
+        } catch (_: Exception) { return@withContext null }
+        try {
+            if (connection.responseCode !in 200..299) return@withContext null
+            val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val metaTags = Regex("""(?is)<meta\b[^>]*>""").findAll(html).map { it.value }.toList()
+            fun attribute(tag: String, name: String): String? =
+                Regex("""(?is)\b$name\s*=\s*["']([^"']+)["']""").find(tag)?.groupValues?.get(1)
+            val image = metaTags.firstNotNullOfOrNull { tag ->
+                val property = (attribute(tag, "property") ?: attribute(tag, "name")).orEmpty().lowercase()
+                if (property in listOf("og:image", "og:image:url", "twitter:image", "twitter:image:src")) {
+                    attribute(tag, "content")?.trim()?.takeIf { it.isNotBlank() }
+                } else null
+            } ?: Regex("""(?is)["']image["']\s*:\s*["']([^"']+)["']""")
+                .find(html)?.groupValues?.get(1)
+            val decoded = image?.replace("&amp;", "&", ignoreCase = true)
+                ?.replace("&#x2F;", "/", ignoreCase = true)?.trim()
+                ?: return@withContext null
+            val resolved = try { URL(URL(pageUrl), decoded).toString() } catch (_: Exception) { return@withContext null }
+            if (resolved.startsWith("https://") || resolved.startsWith("http://")) resolved else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
+    }
+
+    private fun decodeHtml(value: String): String = value
+        .replace("&amp;", "&", ignoreCase = true)
+        .replace("&quot;", "\"", ignoreCase = true)
+        .replace("&#39;", "'", ignoreCase = true)
+        .replace("&#x27;", "'", ignoreCase = true)
+        .replace("&lt;", "<", ignoreCase = true)
+        .replace("&gt;", ">", ignoreCase = true)
+}
+private fun recipeToJson(r: Recipe) = JSONObject().apply {
+    put("id", r.id); put("title", r.title); put("description", r.description)
+    put("ingredients", r.ingredients); put("instructions", r.instructions)
+    put("sourceUrl", r.sourceUrl); put("prepTime", r.prepTime)
+    put("cookTime", r.cookTime); put("servings", r.servings)
+}
+
+private fun recipeFromJson(o: JSONObject) = Recipe(
+    id = o.optString("id", UUID.randomUUID().toString()),
+    title = o.optString("title", "Untitled recipe"),
+    description = o.optString("description"), ingredients = o.optString("ingredients"),
+    instructions = o.optString("instructions"), sourceUrl = o.optString("sourceUrl"),
+    prepTime = o.optString("prepTime"), cookTime = o.optString("cookTime"),
+    servings = o.optString("servings", "2")
+)
+
+class MainActivity : ComponentActivity() {
+    private lateinit var store: RecipeStore
+
+    private val createBackup = registerForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri: Uri? ->
+        if (uri != null) try {
+            contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(store.backupJson()) }
+                ?: throw IllegalStateException("Could not write the backup file.")
+            Toast.makeText(this, "PantryPal backup saved", Toast.LENGTH_LONG).show()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private val openBackup = registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        if (uri != null) try {
+            val recipes = contentResolver.openInputStream(uri)?.bufferedReader()?.use { store.restoreJson(it.readText()) }
+                ?: throw IllegalStateException("Could not read the selected file.")
+            val merged = (store.load().associateBy { it.id } + recipes.associateBy { it.id }).values.toList()
+            store.save(merged)
+            Toast.makeText(this, "Restored ${recipes.size} recipes", Toast.LENGTH_LONG).show()
+            recreate()
+        } catch (e: Exception) {
+            Toast.makeText(this, "Restore failed: ${e.message}", Toast.LENGTH_LONG).show()
+        }
+    }
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        store = RecipeStore(this)
+        val sharedText = intent?.takeIf { it.action == Intent.ACTION_SEND }
+            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+        val sharedUrl = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+        setContent {
+            MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
+                PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
+                    onBackup = { createBackup.launch("PantryPal-backup.json") },
+                    onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) },
+                    initialSharedText = sharedText, initialSharedUrl = sharedUrl)
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PantryPalApp(
+    initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit,
+    initialPlan: List<PlannedMeal>, persistPlan: (List<PlannedMeal>) -> Unit,
+    onBackup: () -> Unit, onRestore: () -> Unit,
+    initialSharedText: String = "", initialSharedUrl: String = ""
+) {
+    var recipes by remember { mutableStateOf(initialRecipes) }
+    var mealPlan by remember { mutableStateOf(initialPlan) }
+    var showPlanner by remember { mutableStateOf(false) }
+    var showShopping by remember { mutableStateOf(false) }
+    var search by remember { mutableStateOf("") }
+    var editing by remember { mutableStateOf<Recipe?>(null) }
+    var showForm by remember { mutableStateOf(false) }
+    var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
+    var showRecipeSearch by remember { mutableStateOf(false) }
+    var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
+    var selected by remember { mutableStateOf<Recipe?>(null) }
+
+    fun update(next: List<Recipe>) {
+        recipes = next
+        persist(next)
+    }
+
+    Scaffold(
+        containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5),
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                        Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
+                            style = MaterialTheme.typography.titleLarge)
+                        Text("YOUR PERSONAL RECIPE BOX", color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                            style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2f.sp)
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5))
+            )
+        }
+    ) { inset ->
+        Column(
+            Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = PantryInk),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("YOUR NEXT FAVOURITE", color = PantryOrange, style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, letterSpacing = 1.4f.sp)
+                    Text("What are we\ncooking today?", color = androidx.compose.ui.graphics.Color.White,
+                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
+                    Text("Find something delicious, or keep your own recipes close at hand.",
+                        color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodyMedium)
+                    Button(
+                        onClick = { showRecipeSearch = true },
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                        contentPadding = PaddingValues(vertical = 13.dp)
+                    ) {
+                        Text("Explore recipes online", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            OutlinedTextField(
+                value = search, onValueChange = { search = it },
+                label = { Text("Search your saved recipes") },
+                placeholder = { Text("Recipe name or ingredient") },
+                leadingIcon = { Text("⌕", style = MaterialTheme.typography.headlineSmall, color = PantryInk) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(16.dp),
+                colors = OutlinedTextFieldDefaults.colors(
+                    focusedBorderColor = PantryOrange,
+                    focusedLabelColor = PantryInk,
+                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                    focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                )
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                Button(
+                    onClick = { editing = null; showForm = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) { Text("+ Add recipe", fontWeight = FontWeight.Bold) }
+                OutlinedButton(
+                    onClick = { showImport = true },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp),
+                    contentPadding = PaddingValues(vertical = 12.dp)
+                ) { Text("Import from link") }
+            }
+
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
+                    Text("Meal planner")
+                }
+                OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
+                    Text("Shopping list")
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("${recipes.size} SAVED ${if (recipes.size == 1) "RECIPE" else "RECIPES"}",
+                    style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                    fontWeight = FontWeight.Bold, letterSpacing = 0.8f.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                        Text("Backup", style = MaterialTheme.typography.labelMedium)
+                    }
+                    TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                        Text("Restore", style = MaterialTheme.typography.labelMedium)
+                    }
+                }
+            }
+
+            val visible = recipes.filter {
+                it.title.contains(search, true) || it.ingredients.contains(search, true)
+            }
+            LazyColumn(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(top = 2.dp, bottom = 24.dp)
+            ) {
+                if (visible.isEmpty()) {
+                    item {
+                        Column(
+                            Modifier.fillMaxWidth().padding(vertical = 26.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
+                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
+                            Spacer(Modifier.height(6.dp))
+                            Text(if (recipes.isEmpty()) "Browse below or add a recipe to get started." else "Try another search.",
+                                color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = { editing = null; showForm = true },
+                                shape = RoundedCornerShape(14.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
+                            ) { Text("Add a recipe") }
+                        }
+                    }
+                } else {
+                    items(visible, key = { it.id }) { recipe ->
+                        Card(
+                            onClick = { selected = recipe },
+                            shape = RoundedCornerShape(18.dp),
+                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(recipe.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
+                                if (recipe.description.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(recipe.description, maxLines = 2, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                                }
+                                Spacer(Modifier.height(8.dp))
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    if (recipe.prepTime.isNotBlank()) Text("Prep ${recipe.prepTime}", style = MaterialTheme.typography.labelSmall)
+                                    if (recipe.cookTime.isNotBlank()) Text("Cook ${recipe.cookTime}", style = MaterialTheme.typography.labelSmall)
+                                    if (recipe.sourceUrl.isNotBlank()) Text("Imported", style = MaterialTheme.typography.labelSmall)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item {
+                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 14.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("BROWSE RECIPES", style = MaterialTheme.typography.labelMedium,
+                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
+                            Text("Popular recipe websites", style = MaterialTheme.typography.titleLarge,
+                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
+                            Text("Choose a site, search for a dish, then preview before adding it to your box.",
+                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                        }
+                        listOf(browseSites.take(3), browseSites.drop(3)).forEach { rowSites ->
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                                rowSites.forEach { site ->
+                                    Card(
+                                        onClick = { selectedBrowseSite = site; showRecipeSearch = true },
+                                        modifier = Modifier.weight(1f),
+                                        shape = RoundedCornerShape(16.dp),
+                                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
+                                    ) {
+                                        Column(
+                                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
+                                            Text(site.name, style = MaterialTheme.typography.labelMedium,
+                                                fontWeight = FontWeight.Bold, color = PantryInk, maxLines = 2,
+                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPlanner) MealPlannerDialog(recipes, mealPlan, { showPlanner = false }) { next ->
+        mealPlan = next
+        persistPlan(next)
+    }
+    if (showShopping) ShoppingListDialog(recipes, mealPlan, { showShopping = false })
+    if (showRecipeSearch) RecipeSearchDialog(
+        site = selectedBrowseSite,
+        onDismiss = { showRecipeSearch = false; selectedBrowseSite = null },
+        onImport = { recipe ->
+            // Online search only opens a preview. Save only when the user taps Add to box.
+            showRecipeSearch = false
+            selectedBrowseSite = null
+            selected = recipe
+        }
+    )
+    if (showForm) RecipeFormDialog(
+        recipe = editing,
+        onDismiss = { showForm = false; editing = null },
+        onSave = { recipe ->
+            val alreadySaved = recipes.any { it.id == recipe.id }
+            if (editing != null && !alreadySaved) {
+                // Editing an imported preview should return to preview; Add to box remains the save action.
+                selected = recipe
+            } else {
+                val next = if (alreadySaved) recipes.map { if (it.id == recipe.id) recipe else it }
+                    else listOf(recipe) + recipes
+                update(next)
+            }
+            showForm = false
+            editing = null
+        }
+    )
+    if (showImport) ImportDialog(
+        initialAddress = initialSharedUrl,
+        sharedText = initialSharedText,
+        onDismiss = { showImport = false },
+        onManual = { showImport = false; editing = null; showForm = true },
+        onImport = { recipe ->
+            // Fetch and preview the recipe without saving it to the local box.
+            showImport = false
+            selected = recipe
+        }
+    )
+    selected?.let { recipe ->
+        RecipeDetailDialog(
+            recipe = recipe,
+            onDismiss = { selected = null },
+            onImportAnother = { selected = null; showImport = true },
+            onEdit = { editing = recipe; selected = null; showForm = true },
+            onAdd = {
+                update(listOf(recipe) + recipes.filterNot { it.id == recipe.id })
+                selected = null
+            },
+            onDelete = {
+                update(recipes.filterNot { it.id == recipe.id })
+                val nextPlan = mealPlan.filterNot { it.recipeId == recipe.id }
+                mealPlan = nextPlan
+                persistPlan(nextPlan)
+                selected = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Recipe) -> Unit) {
+    var title by remember(recipe?.id) { mutableStateOf(recipe?.title ?: "") }
+    var description by remember(recipe?.id) { mutableStateOf(recipe?.description ?: "") }
+    var ingredients by remember(recipe?.id) { mutableStateOf(recipe?.ingredients ?: "") }
+    var instructions by remember(recipe?.id) { mutableStateOf(recipe?.instructions ?: "") }
+    var servings by remember(recipe?.id) { mutableStateOf(recipe?.servings ?: "2") }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(if (recipe == null) "Add recipe" else "Edit recipe") },
+        text = {
+            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(title, { title = it }, label = { Text("Recipe name *") }, singleLine = true)
+                OutlinedTextField(description, { description = it }, label = { Text("Description") })
+                OutlinedTextField(servings, { servings = it }, label = { Text("Servings") }, singleLine = true)
+                OutlinedTextField(ingredients, { ingredients = it }, label = { Text("Ingredients (one per line)") }, minLines = 3)
+                OutlinedTextField(instructions, { instructions = it }, label = { Text("Instructions") }, minLines = 4)
+            }
+        },
+        confirmButton = {
+            Button(enabled = title.isNotBlank(), onClick = {
+                val base = recipe ?: Recipe(title = title.trim())
+                onSave(base.copy(title = title.trim(), description = description.trim(), ingredients = ingredients.trim(),
+                    instructions = instructions.trim(), servings = servings.trim()))
+            }) { Text("Save recipe") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
+    )
+}
+
+@Composable
+private fun ImportDialog(
+    initialAddress: String = "",
+    sharedText: String = "",
+    onDismiss: () -> Unit,
+    onManual: () -> Unit,
+    onImport: (Recipe) -> Unit
+) {
+    var address by remember { mutableStateOf(initialAddress) }
+    var loading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    AlertDialog(
+        onDismissRequest = { if (!loading) onDismiss() },
+        title = { Text("Import a recipe") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(if (sharedText.isNotBlank())
+                    "Shared from another app. If a recipe link was included, PantryPal has filled it in below. Tap Import to try saving it."
+                    else "Paste a recipe webpage URL. PantryPal looks for standard structured recipe data.")
+                if (sharedText.isNotBlank() && address.isBlank()) {
+                    Text("This share didn't include a web link. Open the original post, copy its recipe text, then choose Enter manually in PantryPal.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedTextField(address, { address = it; error = null }, label = { Text("Recipe webpage URL") }, singleLine = true)
+                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                Text("Some sites block imports or do not publish recipe data.", style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            Button(enabled = !loading && address.isNotBlank(), onClick = {
+                loading = true
+                error = null
+                scope.launch {
+                    try { onImport(RecipeImporter().import(address)) }
+                    catch (e: Exception) { error = e.message ?: "Import failed. Try manual entry." }
+                    finally { loading = false }
+                }
+            }) { Text(if (loading) "Importing…" else "Import") }
+        },
+        dismissButton = {
+            Row {
+                TextButton(onClick = onManual) { Text("Enter manually") }
+                TextButton(enabled = !loading, onClick = onDismiss) { Text("Cancel") }
+            }
+        }
+    )
+}
+
+@Composable
+private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
+    var query by remember(site?.domain) { mutableStateOf("") }
+    var results by remember { mutableStateOf<List<RecipeSearchResult>>(emptyList()) }
+    var searching by remember { mutableStateOf(false) }
+    var importingUrl by remember { mutableStateOf<String?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    AlertDialog(
+        onDismissRequest = { if (!searching && importingUrl == null) onDismiss() },
+        title = { Text(site?.let { "Browse ${it.name}" } ?: "Search recipes") },
+        text = {
+            Column(
+                Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Text(site?.let { "Search ${it.name} for a dish or ingredient. Results open as a preview and are only saved when you tap Add to box." }
+                    ?: "Search the web for recipes from popular cooking websites, then preview a result before adding it to PantryPal.")
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = { Text("Dish or ingredient") },
+                    placeholder = { Text(if (site == null) "e.g. chicken curry" else "Search ${site.name}, e.g. chicken curry") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                Button(
+                    enabled = query.isNotBlank() && !searching && importingUrl == null,
+                    onClick = {
+                        searching = true
+                        error = null
+                        results = emptyList()
+                        scope.launch {
+                            try { results = RecipeWebSearch().search(query, site?.domain) }
+                            catch (e: Exception) { error = e.message ?: "Search failed. Try again." }
+                            finally { searching = false }
+                        }
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (searching) "Searching…" else "Search the web") }
+                if (searching || importingUrl != null) LinearProgressIndicator(Modifier.fillMaxWidth())
+                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                results.forEach { result ->
+                    var previewImage by remember(result.url) { mutableStateOf<String?>(null) }
+                    LaunchedEffect(result.url) {
+                        previewImage = RecipeWebSearch().fetchImage(result.url)
+                    }
+                    Card(
+                        shape = RoundedCornerShape(12.dp),
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFFBF2))
+                    ) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            if (previewImage != null) {
+                                AsyncImage(
+                                    model = previewImage,
+                                    contentDescription = "Food preview for ${result.title}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(100.dp).clip(RoundedCornerShape(10.dp))
+                                )
+                            } else {
+                                Box(
+                                    Modifier.size(100.dp).clip(RoundedCornerShape(10.dp))
+                                        .background(androidx.compose.ui.graphics.Color(0xFFF3E8D0)),
+                                    contentAlignment = Alignment.Center
+                                ) { Text("🍽️", style = MaterialTheme.typography.headlineMedium) }
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(result.title, fontWeight = FontWeight.Bold)
+                                Text(
+                                    Uri.parse(result.url).host.orEmpty().removePrefix("www."),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Button(
+                                    enabled = importingUrl == null && !searching,
+                                    onClick = {
+                                        importingUrl = result.url
+                                        error = null
+                                        scope.launch {
+                                            try { onImport(RecipeImporter().import(result.url)) }
+                                            catch (e: Exception) { error = e.message ?: "Could not import this recipe. Try importing its URL directly." }
+                                            finally { importingUrl = null }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(if (importingUrl == result.url) "Loading preview…" else "Preview recipe") }
+                            }
+                        }
+                    }
+                }
+                Text(
+                    "PantryPal reads recipe details where the website makes them available. Some sites block importing; recipes are not saved until you tap Add to box.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = { TextButton(enabled = importingUrl == null && !searching, onClick = onDismiss) { Text("Close") } }
+    )
+}
+
+@Composable
+private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onAdd: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    var cookingMode by remember(recipe.id) { mutableStateOf(false) }
+    var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
+    val ingredients = remember(recipe.ingredients, servings, recipe.servings) {
+        scaleIngredients(recipe.ingredients, servings, recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2)
+    }
+    val steps = remember(recipe.instructions) { recipe.instructions.lines().map { it.trim() }.filter { it.isNotBlank() } }
+    val checkedSteps = remember(recipe.id, cookingMode) { mutableStateMapOf<Int, Boolean>() }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).widthIn(max = 560.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = androidx.compose.ui.graphics.Color(0xFFFFFEFA),
+            tonalElevation = 8.dp,
+            shadowElevation = 16.dp
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(PantryOrange)
+                        .padding(start = 22.dp, end = 12.dp, top = 20.dp, bottom = 20.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(
+                            "YOUR RECIPE",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PantryInk.copy(alpha = 0.72f),
+                            letterSpacing = 1.6.sp
+                        )
+                        Text(
+                            recipe.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PantryInk
+                        )
+                        if (recipe.prepTime.isNotBlank() || recipe.cookTime.isNotBlank()) {
+                            Text(
+                                listOfNotNull(
+                                    recipe.prepTime.takeIf { it.isNotBlank() }?.let { "Prep $it" },
+                                    recipe.cookTime.takeIf { it.isNotBlank() }?.let { "Cook $it" }
+                                ).joinToString("  ·  "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = PantryInk.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Text("✕", color = PantryInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(max = 560.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (recipe.description.isNotBlank()) {
+                        Text(
+                            recipe.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = PantryInk.copy(alpha = 0.9f)
+                        )
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFF3D6)),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("SERVINGS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = PantryInk.copy(alpha = 0.65f))
+                                Text("$servings portions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
+                            }
+                            IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) {
+                                Text("−", fontSize = 24.sp, color = PantryInk)
+                            }
+                            Text("$servings", fontWeight = FontWeight.Bold, color = PantryInk)
+                            IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) {
+                                Text("+", fontSize = 24.sp, color = PantryInk)
+                            }
+                        }
+                    }
+
+                    if (recipe.ingredients.isNotBlank()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Ingredients", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF4F5F2)),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ingredients.lines().filter { it.isNotBlank() }.forEach { ingredient ->
+                                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text("•", color = PantryOrange, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                            Text(ingredient, modifier = Modifier.weight(1f), color = PantryInk, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (recipe.instructions.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Method", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                                Text("Step by step", style = MaterialTheme.typography.bodySmall, color = PantryInk.copy(alpha = 0.65f))
+                            }
+                            Text("Cooking mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = PantryInk)
+                            Switch(checked = cookingMode, onCheckedChange = { cookingMode = it })
+                        }
+                        if (cookingMode) {
+                            steps.forEachIndexed { index, step ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (checkedSteps[index] == true) androidx.compose.ui.graphics.Color(0xFFE8F5E9)
+                                        else androidx.compose.ui.graphics.Color(0xFFF4F5F2)
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Checkbox(
+                                            checked = checkedSteps[index] == true,
+                                            onCheckedChange = { checkedSteps[index] = it }
+                                        )
+                                        Column(modifier = Modifier.weight(1f).padding(top = 10.dp, end = 8.dp)) {
+                                            Text("STEP ${index + 1}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = PantryOrange)
+                                            Text(step, color = PantryInk, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF4F5F2)),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Text(
+                                    recipe.instructions,
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    color = PantryInk,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+
+                    if (recipe.sourceUrl.isNotBlank()) {
+                        Text("Source: ${recipe.sourceUrl}", style = MaterialTheme.typography.bodySmall, color = PantryInk.copy(alpha = 0.6f))
+                    }
+                }
+
+                HorizontalDivider(color = androidx.compose.ui.graphics.Color(0xFFE7E5DF))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onImportAnother,
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                        modifier = Modifier.weight(1.25f)
+                    ) { Text("Import another", maxLines = 1, softWrap = false) }
+                    TextButton(
+                        onClick = onDelete,
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                        modifier = Modifier.weight(0.7f)
+                    ) { Text("Delete", maxLines = 1, softWrap = false) }
+                    Button(
+                        onClick = onAdd,
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(1.0f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Add to box", maxLines = 1, softWrap = false) }
+                    Button(
+                        onClick = onEdit,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(0.8f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Edit", maxLines = 1, softWrap = false) }
+                }
+            }
+        }
+    }
+}
+
+private val plannerDays = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+private val plannerMeals = listOf("Breakfast", "Lunch", "Dinner", "Snack")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MealPlannerDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, onDismiss: () -> Unit, onSave: (List<PlannedMeal>) -> Unit) {
+    var recipeId by remember { mutableStateOf(recipes.firstOrNull()?.id.orEmpty()) }
+    var day by remember { mutableStateOf("Monday") }
+    var mealType by remember { mutableStateOf("Dinner") }
+    var servings by remember { mutableIntStateOf(2) }
+    var recipeMenu by remember { mutableStateOf(false) }
+    var dayMenu by remember { mutableStateOf(false) }
+    var mealMenu by remember { mutableStateOf(false) }
+    val selectedRecipe = recipes.firstOrNull { it.id == recipeId }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Weekly meal planner") }, text = {
+        Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (recipes.isEmpty()) Text("Add a recipe before planning meals.") else {
+                ExposedDropdownMenuBox(expanded = recipeMenu, onExpandedChange = { recipeMenu = it }) {
+                    OutlinedTextField(selectedRecipe?.title ?: "Choose recipe", {}, readOnly = true, label = { Text("Recipe") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = recipeMenu, onDismissRequest = { recipeMenu = false }) {
+                        recipes.forEach { r -> DropdownMenuItem(text = { Text(r.title) }, onClick = { recipeId = r.id; recipeMenu = false; servings = r.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2 }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = dayMenu, onExpandedChange = { dayMenu = it }) {
+                    OutlinedTextField(day, {}, readOnly = true, label = { Text("Day") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = dayMenu, onDismissRequest = { dayMenu = false }) {
+                        plannerDays.forEach { d -> DropdownMenuItem(text = { Text(d) }, onClick = { day = d; dayMenu = false }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = mealMenu, onExpandedChange = { mealMenu = it }) {
+                    OutlinedTextField(mealType, {}, readOnly = true, label = { Text("Meal") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = mealMenu, onDismissRequest = { mealMenu = false }) {
+                        plannerMeals.forEach { m -> DropdownMenuItem(text = { Text(m) }, onClick = { mealType = m; mealMenu = false }) }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Servings", modifier = Modifier.weight(1f))
+                    IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) { Text("−") }
+                    Text("$servings")
+                    IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) { Text("+") }
+                }
+                Button(enabled = selectedRecipe != null, onClick = {
+                    val r = selectedRecipe ?: return@Button
+                    onSave(plan + PlannedMeal(recipeId = r.id, recipeTitle = r.title, day = day, mealType = mealType, servings = servings))
+                }, modifier = Modifier.fillMaxWidth()) { Text("Add to plan") }
+            }
+            Text("Your week", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (plan.isEmpty()) Text("No meals planned yet.")
+            plannerDays.forEach { d ->
+                val entries = plan.filter { it.day == d }.sortedBy { plannerMeals.indexOf(it.mealType) }
+                if (entries.isNotEmpty()) {
+                    Text(d, fontWeight = FontWeight.Bold)
+                    entries.forEach { p ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${p.mealType}: ${p.recipeTitle} · ${p.servings}", modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSave(plan.filterNot { it.id == p.id }) }) { Text("×") }
+                        }
+                    }
+                }
+            }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { onSave(emptyList()) }) { Text("Clear week") } })
+}
+
+@Composable
+private fun ShoppingListDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, onDismiss: () -> Unit) {
+    val checked = remember { mutableStateMapOf<String, Boolean>() }
+    val recipeMap = recipes.associateBy { it.id }
+    val lines = remember(plan, recipes) {
+        val all = mutableListOf<String>()
+        plan.forEach { meal ->
+            val recipe = recipeMap[meal.recipeId] ?: return@forEach
+            val base = recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2
+            recipe.ingredients.lines().filter { it.isNotBlank() }.forEach { ingredient ->
+                all.add(scaleIngredient(ingredient.trim(), meal.servings, base))
+            }
+        }
+        all.distinctBy { it.lowercase().replace(Regex("\\s+"), " ").trim() }
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Shopping list") }, text = {
+        Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${plan.size} planned meals", style = MaterialTheme.typography.labelLarge)
+            if (lines.isEmpty()) Text("Plan some meals to build your shopping list.")
+            lines.forEach { line ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Checkbox(checked = checked[line] == true, onCheckedChange = { checked[line] = it })
+                    Text(line, modifier = Modifier.padding(top = 12.dp).weight(1f))
+                }
+            }
+            if (lines.isNotEmpty()) Text("${checked.count { it.value }} of ${lines.size} checked", style = MaterialTheme.typography.labelMedium)
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { checked.clear() }) { Text("Uncheck all") } })
+}
+
+private fun scaleIngredients(text: String, targetServings: Int, baseServings: Int): String =
+    text.lines().joinToString("\n") { scaleIngredient(it, targetServings, baseServings) }
+
+private fun scaleIngredient(line: String, targetServings: Int, baseServings: Int): String {
+    if (targetServings == baseServings || line.isBlank()) return line
+    val multiplier = targetServings.toDouble() / baseServings.coerceAtLeast(1)
+    val pattern = Regex("^\\s*(\\d+(?:\\.\\d+)?)(.*)$")
+    val match = pattern.find(line) ?: return line
+    val amount = match.groupValues[1].toDoubleOrNull() ?: return line
+    val scaled = amount * multiplier
+    val formatted = if (scaled % 1.0 == 0.0) scaled.toInt().toString() else String.format(java.util.Locale.UK, "%.2f", scaled).trimEnd('0').trimEnd('.')
+    return formatted + match.groupValues[2]
+}
