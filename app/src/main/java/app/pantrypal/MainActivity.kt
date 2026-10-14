@@ -248,16 +248,16 @@ private class RecipeWebSearch {
                 // Bing organic results use h2 links; DuckDuckGo uses result-link classes.
                 val isBing = endpoint.contains("bing.com")
                 val anchors = if (isBing) {
-                    Regex("""(?is)<h2\\b[^>]*>\\s*<a\\b([^>]*)>(.*?)</a>""").findAll(html)
+                    Regex("""(?is)<h2\b[^>]*>\s*<a\b([^>]*)>(.*?)</a>""").findAll(html)
                 } else {
-                    Regex("""(?is)<a\\b([^>]*)>(.*?)</a>""").findAll(html)
+                    Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
                 }
                 val results = anchors.mapNotNull { match ->
                     val attributes = match.groupValues[1]
-                    val classes = Regex("""(?is)\\bclass\\s*=\\s*["']([^"']*)["']""")
+                    val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
                         .find(attributes)?.groupValues?.get(1).orEmpty()
                     if (!isBing && !classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
-                    val rawHref = Regex("""(?is)\\bhref\\s*=\\s*["']([^"']+)["']""")
+                    val rawHref = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
                         .find(attributes)?.groupValues?.get(1) ?: return@mapNotNull null
                     var link = decodeHtml(rawHref.trim())
                     if (link.startsWith("//")) link = "https:$link"
