@@ -9,6 +9,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -259,6 +263,42 @@ private class RecipeWebSearch {
             lastError?.message ?: "Online search failed. Try another search or import a recipe URL directly.",
             lastError
         )
+    }
+
+
+    suspend fun fetchImage(pageUrl: String): String? = withContext(Dispatchers.IO) {
+        val connection = try {
+            (URL(pageUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4500
+                readTimeout = 4500
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            }
+        } catch (_: Exception) { return@withContext null }
+        try {
+            if (connection.responseCode !in 200..299) return@withContext null
+            val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val metaTags = Regex("""(?is)<meta\\b[^>]*>""").findAll(html).map { it.value }.toList()
+            fun attribute(tag: String, name: String): String? =
+                Regex("""(?is)\\b$name\\s*=\\s*["']([^"']+)["']""").find(tag)?.groupValues?.get(1)
+            val image = metaTags.firstNotNullOfOrNull { tag ->
+                val property = (attribute(tag, "property") ?: attribute(tag, "name")).orEmpty().lowercase()
+                if (property in listOf("og:image", "og:image:url", "twitter:image", "twitter:image:src")) {
+                    attribute(tag, "content")?.trim()?.takeIf { it.isNotBlank() }
+                } else null
+            } ?: Regex("""(?is)["']image["']\\s*:\\s*["']([^"']+)["']""")
+                .find(html)?.groupValues?.get(1)
+            val decoded = image?.replace("&amp;", "&", ignoreCase = true)
+                ?.replace("&#x2F;", "/", ignoreCase = true)?.trim()
+                ?: return@withContext null
+            val resolved = try { URL(URL(pageUrl), decoded).toString() } catch (_: Exception) { return@withContext null }
+            if (resolved.startsWith("https://") || resolved.startsWith("http://")) resolved else null
+        } catch (_: Exception) {
+            null
+        } finally {
+            connection.disconnect()
+        }
     }
 
     private fun decodeHtml(value: String): String = value
@@ -686,29 +726,53 @@ private fun RecipeSearchDialog(onDismiss: () -> Unit, onImport: (Recipe) -> Unit
                 if (searching || importingUrl != null) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 results.forEach { result ->
+                    var previewImage by remember(result.url) { mutableStateOf<String?>(null) }
+                    LaunchedEffect(result.url) {
+                        previewImage = RecipeWebSearch().fetchImage(result.url)
+                    }
                     Card(
                         shape = RoundedCornerShape(12.dp),
                         colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFFBF2))
                     ) {
-                        Column(Modifier.fillMaxWidth().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Text(result.title, fontWeight = FontWeight.Bold)
-                            Text(
-                                Uri.parse(result.url).host.orEmpty().removePrefix("www."),
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                            Button(
-                                enabled = importingUrl == null && !searching,
-                                onClick = {
-                                    importingUrl = result.url
-                                    error = null
-                                    scope.launch {
-                                        try { onImport(RecipeImporter().import(result.url)) }
-                                        catch (e: Exception) { error = e.message ?: "Could not import this recipe. Try importing its URL directly." }
-                                        finally { importingUrl = null }
-                                    }
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) { Text(if (importingUrl == result.url) "Importing…" else "Import recipe") }
+                        Row(
+                            Modifier.fillMaxWidth().padding(10.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            if (previewImage != null) {
+                                AsyncImage(
+                                    model = previewImage,
+                                    contentDescription = "Food preview for ${result.title}",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(100.dp).clip(RoundedCornerShape(10.dp))
+                                )
+                            } else {
+                                Box(
+                                    Modifier.size(100.dp).clip(RoundedCornerShape(10.dp))
+                                        .background(androidx.compose.ui.graphics.Color(0xFFF3E8D0)),
+                                    contentAlignment = Alignment.Center
+                                ) { Text("🍽️", style = MaterialTheme.typography.headlineMedium) }
+                            }
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(result.title, fontWeight = FontWeight.Bold)
+                                Text(
+                                    Uri.parse(result.url).host.orEmpty().removePrefix("www."),
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                                Button(
+                                    enabled = importingUrl == null && !searching,
+                                    onClick = {
+                                        importingUrl = result.url
+                                        error = null
+                                        scope.launch {
+                                            try { onImport(RecipeImporter().import(result.url)) }
+                                            catch (e: Exception) { error = e.message ?: "Could not import this recipe. Try importing its URL directly." }
+                                            finally { importingUrl = null }
+                                        }
+                                    },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) { Text(if (importingUrl == result.url) "Importing…" else "Import recipe") }
+                            }
                         }
                     }
                 }
