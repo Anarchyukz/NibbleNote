@@ -246,7 +246,7 @@ private val browseCategories = listOf(
 )
 
 private val browseSites = listOf(
-    BrowseSite("BBC Good Food", "bbcgoodfood.com", "🍲", "Comfort food", "/recipes/collection/healthy-comfort-food-recipes"),
+    BrowseSite("BBC Good Food", "www.bbcgoodfood.com", "🍲", "Comfort food", "/recipes"),
     BrowseSite("Recipe Rebel", "thereciperebel.com", "🥘", "Quick & easy"),
     BrowseSite("Allrecipes", "allrecipes.com", "🍝", "Comfort food"),
     BrowseSite("Jamie Oliver", "jamieoliver.com", "🍋", "Summer & fresh"),
@@ -258,7 +258,7 @@ private val browseSites = listOf(
     BrowseSite("NHS recipes", "nhs.uk", "💚", "Weight loss & lighter meals", "/healthier-families/recipes/"),
     BrowseSite("The Kitchn", "thekitchn.com", "🥘", "Comfort food"),
     BrowseSite("Delish", "delish.com", "🧀", "Comfort food"),
-    BrowseSite("Good Housekeeping", "goodhousekeeping.com", "🍲", "Winter warmers"),
+    BrowseSite("Good Housekeeping", "www.goodhousekeeping.com", "🍲", "Winter warmers", "/food-recipes/"),
     BrowseSite("Olive Magazine", "olivemagazine.com", "🥘", "Winter warmers"),
     BrowseSite("The Spruce Eats", "thespruceeats.com", "🍛", "Winter warmers"),
     BrowseSite("Taste of Home", "tasteofhome.com", "🥧", "Winter warmers"),
@@ -701,11 +701,6 @@ private fun PantryPalApp(
                                     Text(category.subtitle, style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                                 }
                             }
-                            Button(
-                                onClick = { browseThemeQuery = category.query; selectedBrowseSite = null; showRecipeSearch = true },
-                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
-                            ) { Text("Explore this theme", fontWeight = FontWeight.Bold) }
                             browseSites.filter { it.category == category.title }.chunked(2).forEach { rowSites ->
                                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                                     rowSites.forEach { site ->
@@ -1535,6 +1530,22 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                             settings.domStorageEnabled = true
                             settings.loadsImagesAutomatically = true
                             settings.javaScriptCanOpenWindowsAutomatically = false
+                            // Keep touch gestures inside the website browser so parent Compose layouts
+                            // cannot steal vertical swipes from pages with nested scrolling.
+                            isNestedScrollingEnabled = true
+                            isVerticalScrollBarEnabled = true
+                            overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
+                            setOnTouchListener { view, event ->
+                                when (event.actionMasked) {
+                                    android.view.MotionEvent.ACTION_DOWN,
+                                    android.view.MotionEvent.ACTION_MOVE ->
+                                        view.parent?.requestDisallowInterceptTouchEvent(true)
+                                    android.view.MotionEvent.ACTION_UP,
+                                    android.view.MotionEvent.ACTION_CANCEL ->
+                                        view.parent?.requestDisallowInterceptTouchEvent(false)
+                                }
+                                false
+                            }
                             webViewClient = object : WebViewClient() {
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                     currentUrl = url ?: currentUrl
