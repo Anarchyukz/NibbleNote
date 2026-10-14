@@ -3,7 +3,7 @@ name: PantryPal Android build
 on:
   push:
     branches: [ "main" ]
-    tags: [ "v*" ]
+    tags: [ "v*", "V*" ]
   pull_request:
   workflow_dispatch:
 
@@ -75,4 +75,8 @@ jobs:
             APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
             NOTES="PantryPal debug-signed testing APK. Configure signing secrets for a signed release build."
           fi
-          gh release create "$GITHUB_REF_NAME" "$APK_PATH" --title "PantryPal $GITHUB_REF_NAME" --notes "$NOTES"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "$APK_PATH" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "$APK_PATH" --title "PantryPal $GITHUB_REF_NAME" --notes "$NOTES"
+          fi
