@@ -2,28 +2,29 @@
 
 **Your recipes, your kitchen.** PantryPal is a free, open-source Android recipe organiser built with Kotlin and Jetpack Compose. The MVP stores recipes locally and imports from websites that publish Schema.org `Recipe` JSON-LD data.
 
-## MVP features
+## Features
 - Add, edit, search and delete recipes.
 - Local device storage; no account or server required.
 - Import recipe name, description, ingredients and instructions from supported recipe pages.
-- GitHub Actions builds a debug APK on pushes, pull requests and manual runs.
-- Push a `v*` tag to build and attach an APK to a GitHub Release.
+- Nutrition details, recipe website browsing and themed discovery.
+- GitHub Actions builds an installable APK when code is updated.
+- Versioned APK releases can be published from a `v*` tag.
 
-## Build
+## Download and install
+Open the [latest PantryPal build](https://github.com/Anarchyukz/PantryPal/actions). Select the latest successful run, scroll to **Artifacts**, and download `PantryPal-APK`. Extract the ZIP and install the APK on your Android device.
+
+The automated build uses Android's debug signing key unless release-signing secrets are configured in GitHub. For a stable signing identity across future updates, configure `PANTRYPAL_KEYSTORE_BASE64`, `PANTRYPAL_KEYSTORE_PASSWORD`, `PANTRYPAL_KEY_ALIAS` and `PANTRYPAL_KEY_PASSWORD` as repository Actions secrets before distributing signed release builds. Never commit signing keys or passwords.
+
+## Build from source
 Requirements: JDK 17, Android SDK 36, Gradle 8.13.
 
 ```bash
 gradle assembleDebug
 ```
 
-APK output: `app/build/outputs/apk/debug/app-debug.apk`. In GitHub Actions, download the `PantryPal-debug-apk` artifact. To publish a versioned testing release:
+APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-```bash
-git tag v0.1.0
-git push origin v0.1.0
-```
-
-The workflow currently publishes a debug-signed APK for testing. Configure secure release signing before wider distribution; never commit signing keys or passwords.
+To publish a versioned APK, push a tag beginning with `v` (for example, `v1.0.0`). Configure release signing first if you need an APK that can be updated in place across future builds.
 
 ## Donations
 PantryPal is free. Add voluntary donation links here when ready:
@@ -33,10 +34,10 @@ PantryPal is free. Add voluntary donation links here when ready:
 Donations are optional and do not unlock features.
 
 ## Importing limitations
-The importer looks for Schema.org `Recipe` JSON-LD. Some sites block automated access or don't provide structured data. Instagram and TikTok imports are not guaranteed in this MVP and may require separate integrations. Only import content you have permission to use.
+The importer looks for Schema.org `Recipe` JSON-LD. Some sites block automated access or don't provide structured data. Social media imports may require pasting the recipe caption/text and are not guaranteed to work for every post. Only import content you have permission to use.
 
 ## Privacy
-Recipes are stored in app-private local storage. Importing makes a network request to the URL entered. This MVP has no account, analytics or cloud sync. Back up important recipes separately until export/backup is implemented.
+Recipes are stored in app-private local storage. Importing makes a network request to the URL entered. This app has no account, analytics or cloud sync. Back up important recipes separately until export/backup is implemented.
 
 ## Roadmap
 - [ ] Recipe backup/export
