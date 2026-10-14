@@ -5,6 +5,10 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
+import android.webkit.WebChromeClient
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -23,6 +27,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -427,6 +432,7 @@ private fun PantryPalApp(
     var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
     var showRecipeSearch by remember { mutableStateOf(false) }
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
+    var browsingUrl by remember { mutableStateOf<String?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
     var selected by remember { mutableStateOf<Recipe?>(null) }
     val context = LocalContext.current
@@ -625,14 +631,8 @@ private fun PantryPalApp(
                             rowSites.forEach { site ->
                                 Card(
                                     onClick = {
-                                        val website = "https://${site.domain}"
-                                        try {
-                                            // Open the actual recipe website in the browser, rather than searching inside PantryPal.
-                                            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(website)))
-                                        } catch (_: Exception) {
-                                            selectedBrowseSite = site
-                                            showRecipeSearch = true
-                                        }
+                                        // Open the full website inside PantryPal using Android's built-in WebView.
+                                        browsingUrl = "https://${site.domain}"
                                     },
                                     modifier = Modifier.weight(1f),
                                     shape = RoundedCornerShape(16.dp),
@@ -663,6 +663,13 @@ private fun PantryPalApp(
                 }
             }
         }
+    }
+
+    browsingUrl?.let { startUrl ->
+        RecipeBrowserDialog(
+            initialUrl = startUrl,
+            onDismiss = { browsingUrl = null }
+        )
     }
 
     if (showPlanner) MealPlannerDialog(recipes, mealPlan, { showPlanner = false }) { next ->
@@ -1222,6 +1229,120 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
                         shape = RoundedCornerShape(14.dp)
                     ) { Text("Edit", maxLines = 1, softWrap = false) }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    var currentUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
+    var pageTitle by remember(initialUrl) { mutableStateOf("Recipe website") }
+    var progress by remember(initialUrl) { mutableIntStateOf(0) }
+    var canGoBack by remember { mutableStateOf(false) }
+    var webView by remember { mutableStateOf<WebView?>(null) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxSize(),
+            color = androidx.compose.ui.graphics.Color.White
+        ) {
+            Column(Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(PantryInk)
+                        .padding(horizontal = 8.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    TextButton(
+                        onClick = {
+                            val browser = webView
+                            if (browser != null && browser.canGoBack()) browser.goBack() else onDismiss()
+                        },
+                        enabled = canGoBack || currentUrl == initialUrl,
+                        colors = ButtonDefaults.textButtonColors(contentColor = androidx.compose.ui.graphics.Color.White)
+                    ) { Text("‹ Back") }
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            pageTitle.ifBlank { "Recipe website" },
+                            color = androidx.compose.ui.graphics.Color.White,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1
+                        )
+                        Text(
+                            currentUrl.removePrefix("https://").removePrefix("http://"),
+                            color = androidx.compose.ui.graphics.Color(0xFFD1D5DB),
+                            style = MaterialTheme.typography.labelSmall,
+                            maxLines = 1
+                        )
+                    }
+                    TextButton(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.textButtonColors(contentColor = PantryOrange)
+                    ) { Text("Done", fontWeight = FontWeight.Bold) }
+                }
+                if (progress in 1..99) {
+                    LinearProgressIndicator(
+                        progress = { progress / 100f },
+                        modifier = Modifier.fillMaxWidth(),
+                        color = PantryOrange
+                    )
+                }
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { viewContext ->
+                        WebView(viewContext).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.loadsImagesAutomatically = true
+                            settings.javaScriptCanOpenWindowsAutomatically = false
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                                    currentUrl = url ?: currentUrl
+                                    canGoBack = view?.canGoBack() == true
+                                }
+
+                                override fun onPageFinished(view: WebView?, url: String?) {
+                                    currentUrl = url ?: currentUrl
+                                    pageTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentUrl
+                                    canGoBack = view?.canGoBack() == true
+                                }
+
+                                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                    val target = request.url
+                                    if (target.scheme == "http" || target.scheme == "https") return false
+                                    return try {
+                                        context.startActivity(Intent(Intent.ACTION_VIEW, target))
+                                        true
+                                    } catch (_: Exception) {
+                                        true
+                                    }
+                                }
+                            }
+                            webChromeClient = object : WebChromeClient() {
+                                override fun onProgressChanged(view: WebView?, newProgress: Int) {
+                                    progress = newProgress
+                                    pageTitle = view?.title?.takeIf { it.isNotBlank() } ?: pageTitle
+                                }
+                            }
+                            webView = this
+                            loadUrl(initialUrl)
+                        }
+                    },
+                    update = { view ->
+                        if (view.url == null) view.loadUrl(initialUrl)
+                    },
+                    onRelease = { view ->
+                        view.stopLoading()
+                        view.destroy()
+                        if (webView === view) webView = null
+                    }
+                )
             }
         }
     }
