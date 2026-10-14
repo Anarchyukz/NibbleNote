@@ -341,7 +341,6 @@ private fun PantryPalApp(
                     TextButton(onClick = onBackup) { Text("Backup") }
                     TextButton(onClick = onRestore) { Text("Restore") }
                     TextButton(onClick = { showImport = true }) { Text("Import") }
-                    TextButton(onClick = { showRecipeSearch = true }) { Text("Search") }
                     TextButton(onClick = { editing = null; showForm = true }) { Text("+ Add") }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = PantryOrange)
@@ -355,6 +354,14 @@ private fun PantryPalApp(
                 label = { Text("Search your recipes") }, singleLine = true,
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
             )
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = { showRecipeSearch = true },
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp)
+            ) {
+                Text("Find recipes online")
+            }
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                 OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f)) { Text("Meal planner") }
