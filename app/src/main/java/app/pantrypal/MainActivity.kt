@@ -288,7 +288,7 @@ private class RecipeWebSearch {
                     Triple(RecipeSearchResult(title, link), if (resultClass || inBingResultBlock) 0 else 1, match.range.first)
                 }.distinctBy { it.first.url }
                     .sortedWith(compareBy<Triple<RecipeSearchResult, Int, Int>> { it.second }.thenBy { it.third })
-                    .map { it.first }.take(12)
+                    .map { it.first }.take(12).toList()
                 if (parsed.isNotEmpty()) return@withContext parsed
                 lastError = IllegalStateException("Search provider responded, but its links could not be identified.")
             } catch (e: Exception) {
