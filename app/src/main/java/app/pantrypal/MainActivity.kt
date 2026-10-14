@@ -229,15 +229,60 @@ private class RecipeImporter {
     }
 }
 
-private data class BrowseSite(val name: String, val domain: String, val emoji: String)
+private data class BrowseSite(val name: String, val domain: String, val emoji: String, val category: String = "Everyday", val path: String = "")
+private data class BrowseCategory(val title: String, val subtitle: String, val emoji: String, val query: String)
+
+private val browseCategories = listOf(
+    BrowseCategory("Weight loss & lighter meals", "Lighter recipes and balanced meal ideas.", "🥗", "low calorie healthy recipes"),
+    BrowseCategory("Comfort food", "Cosy favourites, pies, pasta bakes, curries and puddings.", "🍲", "comfort food recipes"),
+    BrowseCategory("Winter warmers", "Soups, stews, slow-cooker dinners and hearty seasonal dishes.", "❄️", "winter warmer soup stew slow cooker recipes"),
+    BrowseCategory("Summer & fresh", "Salads, barbecue, fresh lunches and fruity desserts.", "☀️", "summer fresh salad barbecue recipes"),
+    BrowseCategory("High protein", "Protein-rich meals, meal prep and filling lunches.", "💪", "high protein chicken fish vegetarian recipes"),
+    BrowseCategory("Budget-friendly", "Cheap ingredients and family-friendly meals.", "💷", "cheap budget family dinner recipes"),
+    BrowseCategory("Quick & easy", "Weeknight dinners and recipes with few ingredients.", "⏱️", "quick easy 20 minute recipes"),
+    BrowseCategory("Vegetarian & plant-based", "Meat-free meals and colourful vegetable dishes.", "🌱", "vegetarian vegan plant based recipes"),
+    BrowseCategory("Baking & sweet treats", "Cakes, biscuits, bread and desserts.", "🍰", "easy baking cake biscuit dessert recipes"),
+    BrowseCategory("World flavours", "Curries, noodles and dishes from around the world.", "🌍", "easy world cuisine curry noodle recipes")
+)
 
 private val browseSites = listOf(
-    BrowseSite("BBC Good Food", "bbcgoodfood.com", "🍲"),
-    BrowseSite("Recipe Rebel", "thereciperebel.com", "🥘"),
-    BrowseSite("Allrecipes", "allrecipes.com", "🍝"),
-    BrowseSite("Jamie Oliver", "jamieoliver.com", "🍋"),
-    BrowseSite("RecipeTin Eats", "recipetineats.com", "🍜"),
-    BrowseSite("Simply Recipes", "simplyrecipes.com", "🥗")
+    BrowseSite("BBC Good Food", "bbcgoodfood.com", "🍲", "Comfort food", "/recipes/collection/healthy-comfort-food-recipes"),
+    BrowseSite("Recipe Rebel", "thereciperebel.com", "🥘", "Quick & easy"),
+    BrowseSite("Allrecipes", "allrecipes.com", "🍝", "Comfort food"),
+    BrowseSite("Jamie Oliver", "jamieoliver.com", "🍋", "Summer & fresh"),
+    BrowseSite("RecipeTin Eats", "recipetineats.com", "🍜", "World flavours"),
+    BrowseSite("Simply Recipes", "simplyrecipes.com", "🥗", "Quick & easy"),
+    BrowseSite("EatingWell", "eatingwell.com", "🥦", "Weight loss & lighter meals"),
+    BrowseSite("Skinnytaste", "skinnytaste.com", "🥗", "Weight loss & lighter meals"),
+    BrowseSite("Healthy Food Guide", "healthyfood.com", "🥑", "Weight loss & lighter meals"),
+    BrowseSite("NHS recipes", "nhs.uk", "💚", "Weight loss & lighter meals", "/healthier-families/recipes/"),
+    BrowseSite("The Kitchn", "thekitchn.com", "🥘", "Comfort food"),
+    BrowseSite("Delish", "delish.com", "🧀", "Comfort food"),
+    BrowseSite("Good Housekeeping", "goodhousekeeping.com", "🍲", "Winter warmers"),
+    BrowseSite("Olive Magazine", "olivemagazine.com", "🥘", "Winter warmers"),
+    BrowseSite("The Spruce Eats", "thespruceeats.com", "🍛", "Winter warmers"),
+    BrowseSite("Taste of Home", "tasteofhome.com", "🥧", "Winter warmers"),
+    BrowseSite("Mob", "mob.co.uk", "🥙", "Summer & fresh"),
+    BrowseSite("Love and Lemons", "loveandlemons.com", "🍋", "Summer & fresh"),
+    BrowseSite("Smitten Kitchen", "smittenkitchen.com", "🍅", "Summer & fresh"),
+    BrowseSite("The Protein Chef", "theproteinchef.co", "🥩", "High protein"),
+    BrowseSite("Fit Men Cook", "fitmencook.com", "🍗", "High protein"),
+    BrowseSite("Muscle & Strength", "muscleandstrength.com", "💪", "High protein"),
+    BrowseSite("Cooking on a Bootstrap", "cookingonabootstrap.com", "🥫", "Budget-friendly"),
+    BrowseSite("Budget Bytes", "budgetbytes.com", "🫘", "Budget-friendly"),
+    BrowseSite("Tesco Real Food", "realfood.tesco.com", "🛒", "Budget-friendly"),
+    BrowseSite("Food Network", "foodnetwork.com", "🍳", "Quick & easy"),
+    BrowseSite("Tasty", "tasty.co", "🍴", "Quick & easy"),
+    BrowseSite("Minimalist Baker", "minimalistbaker.com", "🌱", "Vegetarian & plant-based"),
+    BrowseSite("Cookie and Kate", "cookieandkate.com", "🥑", "Vegetarian & plant-based"),
+    BrowseSite("Forks Over Knives", "forksoverknives.com", "🥕", "Vegetarian & plant-based"),
+    BrowseSite("King Arthur Baking", "kingarthurbaking.com", "🍞", "Baking & sweet treats"),
+    BrowseSite("Jane's Patisserie", "janespatisserie.com", "🧁", "Baking & sweet treats"),
+    BrowseSite("Sally's Baking Addiction", "sallysbakingaddiction.com", "🍪", "Baking & sweet treats"),
+    BrowseSite("Maangchi", "maangchi.com", "🍚", "World flavours"),
+    BrowseSite("Just One Cookbook", "justonecookbook.com", "🍱", "World flavours"),
+    BrowseSite("The Woks of Life", "thewoksoflife.com", "🥢", "World flavours"),
+    BrowseSite("Serious Eats", "seriouseats.com", "🌮", "World flavours")
 )
 
 private data class RecipeSearchResult(val title: String, val url: String)
@@ -452,6 +497,7 @@ private fun PantryPalApp(
     var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
     var showRecipeSearch by remember { mutableStateOf(false) }
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
+    var browseThemeQuery by remember { mutableStateOf("") }
     var browsingUrl by remember { mutableStateOf<String?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
     var selected by remember { mutableStateOf<Recipe?>(null) }
@@ -646,31 +692,39 @@ private fun PantryPalApp(
                                 style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                         }
                     }
-                    items((browseSites.size + 1) / 2) { index ->
-                        val rowSites = browseSites.drop(index * 2).take(2)
-                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                            rowSites.forEach { site ->
-                                Card(
-                                    onClick = {
-                                        // Open the full website inside PantryPal using Android's built-in WebView.
-                                        browsingUrl = "https://${site.domain}"
-                                    },
-                                    modifier = Modifier.weight(1f),
-                                    shape = RoundedCornerShape(16.dp),
-                                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
-                                ) {
-                                    Row(
-                                        Modifier.fillMaxWidth().padding(12.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                                    ) {
-                                        Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
-                                        Text(site.name, style = MaterialTheme.typography.labelLarge,
-                                            fontWeight = FontWeight.Bold, color = PantryInk, maxLines = 2)
-                                    }
+                    items(browseCategories, key = { it.title }) { category ->
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Text(category.emoji, style = MaterialTheme.typography.headlineMedium)
+                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                                    Text(category.subtitle, style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                                 }
                             }
-                            if (rowSites.size == 1) Spacer(Modifier.weight(1f))
+                            Button(
+                                onClick = { browseThemeQuery = category.query; selectedBrowseSite = null; showRecipeSearch = true },
+                                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
+                            ) { Text("Explore this theme", fontWeight = FontWeight.Bold) }
+                            browseSites.filter { it.category == category.title }.chunked(2).forEach { rowSites ->
+                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                                    rowSites.forEach { site ->
+                                        Card(
+                                            onClick = { browsingUrl = "https://${site.domain}${site.path}" },
+                                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
+                                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
+                                        ) {
+                                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                                Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
+                                                Text(site.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+                                                    color = PantryInk, maxLines = 2)
+                                            }
+                                        }
+                                    }
+                                    if (rowSites.size == 1) Spacer(Modifier.weight(1f))
+                                }
+                            }
                         }
                     }
                     item {
@@ -705,7 +759,8 @@ private fun PantryPalApp(
     if (showShopping) ShoppingListDialog(recipes, mealPlan, { showShopping = false })
     if (showRecipeSearch) RecipeSearchDialog(
         site = selectedBrowseSite,
-        onDismiss = { showRecipeSearch = false; selectedBrowseSite = null },
+        initialQuery = browseThemeQuery,
+        onDismiss = { showRecipeSearch = false; selectedBrowseSite = null; browseThemeQuery = "" },
         onImport = { recipe ->
             // Online search only opens a preview. Save only when the user taps Add to box.
             showRecipeSearch = false
@@ -1017,9 +1072,9 @@ private fun ImportDialog(
 }
 
 @Composable
-private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
-    var query by remember(site?.domain) {
-        mutableStateOf(if (site != null) randomBrowseQueries.random() else "")
+private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = "", onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
+    var query by remember(site?.domain, initialQuery) {
+        mutableStateOf(if (site != null) randomBrowseQueries.random() else initialQuery)
     }
     var results by remember { mutableStateOf<List<RecipeSearchResult>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
