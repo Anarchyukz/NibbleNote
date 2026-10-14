@@ -57,7 +57,11 @@ data class Recipe(
     val sourceUrl: String = "",
     val prepTime: String = "",
     val cookTime: String = "",
-    val servings: String = "2"
+    val servings: String = "2",
+    val calories: String = "",
+    val protein: String = "",
+    val carbs: String = "",
+    val fat: String = ""
 )
 
 data class PlannedMeal(
@@ -85,7 +89,9 @@ class RecipeStore(context: Context) {
                 sourceUrl = o.optString("sourceUrl"),
                 prepTime = o.optString("prepTime"),
                 cookTime = o.optString("cookTime"),
-                servings = o.optString("servings", "2")
+                servings = o.optString("servings", "2"),
+                calories = o.optString("calories"), protein = o.optString("protein"),
+                carbs = o.optString("carbs"), fat = o.optString("fat")
             )
         }
     } catch (_: Exception) { emptyList() }
@@ -201,6 +207,13 @@ private class RecipeImporter {
             }
         }
         readSteps(o.opt("recipeInstructions"))
+        val nutrition = o.optJSONObject("nutrition")
+        fun nutritionValue(key: String): String {
+            val raw = nutrition?.optString(key)?.takeIf { it.isNotBlank() && it != "null" } ?: return ""
+            val number = Regex("""-?\\d+(?:[.,]\\d+)?""").find(raw)?.value?.replace(',', '.') ?: return ""
+            val parsed = number.toDoubleOrNull() ?: return ""
+            return if (parsed % 1.0 == 0.0) parsed.toInt().toString() else String.format(java.util.Locale.UK, "%.1f", parsed)
+        }
         return Recipe(
             title = o.optString("name").ifBlank { "Imported recipe" },
             description = o.optString("description"),
@@ -209,7 +222,9 @@ private class RecipeImporter {
             sourceUrl = address,
             prepTime = o.optString("prepTime"),
             cookTime = o.optString("cookTime"),
-            servings = o.opt("recipeYield")?.toString()?.replace("[", "")?.replace("]", "")?.replace("\"", "") ?: "2"
+            servings = o.opt("recipeYield")?.toString()?.replace("[", "")?.replace("]", "")?.replace("\"", "") ?: "2",
+            calories = nutritionValue("calories"), protein = nutritionValue("proteinContent"),
+            carbs = nutritionValue("carbohydrateContent"), fat = nutritionValue("fatContent")
         )
     }
 }
@@ -361,6 +376,8 @@ private fun recipeToJson(r: Recipe) = JSONObject().apply {
     put("ingredients", r.ingredients); put("instructions", r.instructions)
     put("sourceUrl", r.sourceUrl); put("prepTime", r.prepTime)
     put("cookTime", r.cookTime); put("servings", r.servings)
+    put("calories", r.calories); put("protein", r.protein)
+    put("carbs", r.carbs); put("fat", r.fat)
 }
 
 private fun recipeFromJson(o: JSONObject) = Recipe(
@@ -369,7 +386,9 @@ private fun recipeFromJson(o: JSONObject) = Recipe(
     description = o.optString("description"), ingredients = o.optString("ingredients"),
     instructions = o.optString("instructions"), sourceUrl = o.optString("sourceUrl"),
     prepTime = o.optString("prepTime"), cookTime = o.optString("cookTime"),
-    servings = o.optString("servings", "2")
+    servings = o.optString("servings", "2"),
+    calories = o.optString("calories"), protein = o.optString("protein"),
+    carbs = o.optString("carbs"), fat = o.optString("fat")
 )
 
 class MainActivity : ComponentActivity() {
@@ -802,6 +821,15 @@ private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
                         color = androidx.compose.ui.graphics.Color(0xFF6B7280),
                         style = MaterialTheme.typography.bodySmall)
                 }
+                if (listOf(recipe.calories, recipe.protein, recipe.carbs, recipe.fat).any { it.isNotBlank() }) {
+                    Text(listOfNotNull(
+                        recipe.calories.takeIf { it.isNotBlank() }?.let { "$it kcal" },
+                        recipe.protein.takeIf { it.isNotBlank() }?.let { "P $it g" },
+                        recipe.carbs.takeIf { it.isNotBlank() }?.let { "C $it g" },
+                        recipe.fat.takeIf { it.isNotBlank() }?.let { "F $it g" }
+                    ).joinToString("  ·  "), style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, color = PantryInk)
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (recipe.prepTime.isNotBlank()) {
                         Surface(color = androidx.compose.ui.graphics.Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
@@ -831,6 +859,10 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
     var ingredients by remember(recipe?.id) { mutableStateOf(recipe?.ingredients ?: "") }
     var instructions by remember(recipe?.id) { mutableStateOf(recipe?.instructions ?: "") }
     var servings by remember(recipe?.id) { mutableStateOf(recipe?.servings ?: "2") }
+    var calories by remember(recipe?.id) { mutableStateOf(recipe?.calories ?: "") }
+    var protein by remember(recipe?.id) { mutableStateOf(recipe?.protein ?: "") }
+    var carbs by remember(recipe?.id) { mutableStateOf(recipe?.carbs ?: "") }
+    var fat by remember(recipe?.id) { mutableStateOf(recipe?.fat ?: "") }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(if (recipe == null) "Add recipe" else "Edit recipe") },
@@ -839,6 +871,16 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
                 OutlinedTextField(title, { title = it }, label = { Text("Recipe name *") }, singleLine = true)
                 OutlinedTextField(description, { description = it }, label = { Text("Description") })
                 OutlinedTextField(servings, { servings = it }, label = { Text("Servings") }, singleLine = true)
+                Text("Nutrition per serving (optional)", fontWeight = FontWeight.Bold, color = PantryInk)
+                Text("Use values from the recipe or a nutrition label. Missing values aren't guessed.", style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(calories, { calories = it }, label = { Text("Calories (kcal)") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(protein, { protein = it }, label = { Text("Protein (g)") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(carbs, { carbs = it }, label = { Text("Carbs (g)") }, singleLine = true, modifier = Modifier.weight(1f))
+                    OutlinedTextField(fat, { fat = it }, label = { Text("Fat (g)") }, singleLine = true, modifier = Modifier.weight(1f))
+                }
                 OutlinedTextField(ingredients, { ingredients = it }, label = { Text("Ingredients (one per line)") }, minLines = 3)
                 OutlinedTextField(instructions, { instructions = it }, label = { Text("Instructions") }, minLines = 4)
             }
@@ -847,7 +889,8 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
             Button(enabled = title.isNotBlank(), onClick = {
                 val base = recipe ?: Recipe(title = title.trim())
                 onSave(base.copy(title = title.trim(), description = description.trim(), ingredients = ingredients.trim(),
-                    instructions = instructions.trim(), servings = servings.trim()))
+                    instructions = instructions.trim(), servings = servings.trim(),
+                    calories = calories.trim(), protein = protein.trim(), carbs = carbs.trim(), fat = fat.trim()))
             }) { Text("Save recipe") }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } }
@@ -1106,6 +1149,14 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, 
 }
 
 @Composable
+private fun NutritionValue(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = MaterialTheme.typography.labelSmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+        Text(value, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
+    }
+}
+
+@Composable
 private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onAdd: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     var cookingMode by remember(recipe.id) { mutableStateOf(false) }
     var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
@@ -1197,6 +1248,22 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
                             Text("$servings", fontWeight = FontWeight.Bold, color = PantryInk)
                             IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) {
                                 Text("+", fontSize = 24.sp, color = PantryInk)
+                            }
+                        }
+                    }
+
+                    if (listOf(recipe.calories, recipe.protein, recipe.carbs, recipe.fat).any { it.isNotBlank() }) {
+                        Card(colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF4F5F2)), shape = RoundedCornerShape(18.dp)) {
+                            Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text("Nutrition per serving", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    NutritionValue("Calories", recipe.calories.takeIf { it.isNotBlank() }?.let { "$it kcal" } ?: "—", Modifier.weight(1f))
+                                    NutritionValue("Protein", recipe.protein.takeIf { it.isNotBlank() }?.let { "$it g" } ?: "—", Modifier.weight(1f))
+                                }
+                                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    NutritionValue("Carbs", recipe.carbs.takeIf { it.isNotBlank() }?.let { "$it g" } ?: "—", Modifier.weight(1f))
+                                    NutritionValue("Fat", recipe.fat.takeIf { it.isNotBlank() }?.let { "$it g" } ?: "—", Modifier.weight(1f))
+                                }
                             }
                         }
                     }
