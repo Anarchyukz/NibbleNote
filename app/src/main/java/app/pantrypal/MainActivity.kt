@@ -43,6 +43,15 @@ data class Recipe(
     val servings: String = "2"
 )
 
+data class PlannedMeal(
+    val id: String = UUID.randomUUID().toString(),
+    val recipeId: String,
+    val recipeTitle: String,
+    val day: String,
+    val mealType: String,
+    val servings: Int
+)
+
 class RecipeStore(context: Context) {
     private val prefs = context.getSharedPreferences("pantrypal", Context.MODE_PRIVATE)
 
@@ -81,6 +90,26 @@ class RecipeStore(context: Context) {
         val array = JSONArray()
         recipes.forEach { r -> array.put(recipeToJson(r)) }
         prefs.edit().putString("recipes", array.toString()).apply()
+    }
+
+    fun loadPlan(): List<PlannedMeal> = try {
+        val array = JSONArray(prefs.getString("meal_plan", "[]") ?: "[]")
+        (0 until array.length()).mapNotNull { i ->
+            array.optJSONObject(i)?.let { o ->
+                PlannedMeal(o.optString("id", UUID.randomUUID().toString()), o.optString("recipeId"),
+                    o.optString("recipeTitle"), o.optString("day", "Monday"),
+                    o.optString("mealType", "Dinner"), o.optInt("servings", 2).coerceAtLeast(1))
+            }
+        }
+    } catch (_: Exception) { emptyList() }
+
+    fun savePlan(plan: List<PlannedMeal>) {
+        val array = JSONArray()
+        plan.forEach { p -> array.put(JSONObject().apply {
+            put("id", p.id); put("recipeId", p.recipeId); put("recipeTitle", p.recipeTitle)
+            put("day", p.day); put("mealType", p.mealType); put("servings", p.servings)
+        }) }
+        prefs.edit().putString("meal_plan", array.toString()).apply()
     }
 }
 
@@ -215,7 +244,7 @@ class MainActivity : ComponentActivity() {
         store = RecipeStore(this)
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
-                PantryPalApp(store.load(), store::save,
+                PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
                     onBackup = { createBackup.launch("PantryPal-backup.json") },
                     onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) })
             }
@@ -225,8 +254,15 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit, onBackup: () -> Unit, onRestore: () -> Unit) {
+private fun PantryPalApp(
+    initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit,
+    initialPlan: List<PlannedMeal>, persistPlan: (List<PlannedMeal>) -> Unit,
+    onBackup: () -> Unit, onRestore: () -> Unit
+) {
     var recipes by remember { mutableStateOf(initialRecipes) }
+    var mealPlan by remember { mutableStateOf(initialPlan) }
+    var showPlanner by remember { mutableStateOf(false) }
+    var showShopping by remember { mutableStateOf(false) }
     var search by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Recipe?>(null) }
     var showForm by remember { mutableStateOf(false) }
@@ -265,6 +301,11 @@ private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -
                 modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)
             )
             Spacer(Modifier.height(12.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f)) { Text("Meal planner") }
+                OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f)) { Text("Shopping list") }
+            }
+            Spacer(Modifier.height(8.dp))
             Text("${recipes.size} saved ${if (recipes.size == 1) "recipe" else "recipes"}", style = MaterialTheme.typography.labelLarge)
             Spacer(Modifier.height(8.dp))
             val visible = recipes.filter {
@@ -312,6 +353,11 @@ private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -
         }
     }
 
+    if (showPlanner) MealPlannerDialog(recipes, mealPlan, { showPlanner = false }) { next ->
+        mealPlan = next
+        persistPlan(next)
+    }
+    if (showShopping) ShoppingListDialog(recipes, mealPlan, { showShopping = false })
     if (showForm) RecipeFormDialog(
         recipe = editing,
         onDismiss = { showForm = false; editing = null },
@@ -337,7 +383,13 @@ private fun PantryPalApp(initialRecipes: List<Recipe>, persist: (List<Recipe>) -
             recipe = recipe,
             onDismiss = { selected = null },
             onEdit = { editing = recipe; selected = null; showForm = true },
-            onDelete = { update(recipes.filterNot { it.id == recipe.id }); selected = null }
+            onDelete = {
+                update(recipes.filterNot { it.id == recipe.id })
+                val nextPlan = mealPlan.filterNot { it.recipeId == recipe.id }
+                mealPlan = nextPlan
+                persistPlan(nextPlan)
+                selected = null
+            }
         )
     }
 }
@@ -412,20 +464,41 @@ private fun ImportDialog(onDismiss: () -> Unit, onManual: () -> Unit, onImport: 
 
 @Composable
 private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    var cookingMode by remember(recipe.id) { mutableStateOf(false) }
+    var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
+    val ingredients = remember(recipe.ingredients, servings, recipe.servings) {
+        scaleIngredients(recipe.ingredients, servings, recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2)
+    }
+    val steps = remember(recipe.instructions) { recipe.instructions.lines().map { it.trim() }.filter { it.isNotBlank() } }
+    val checkedSteps = remember(recipe.id, cookingMode) { mutableStateMapOf<Int, Boolean>() }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(recipe.title) },
         text = {
             Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (recipe.description.isNotBlank()) Text(recipe.description)
-                Text("Servings: ${recipe.servings}", fontWeight = FontWeight.SemiBold)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Servings", fontWeight = FontWeight.SemiBold)
+                    IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) { Text("−") }
+                    Text("$servings")
+                    IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) { Text("+") }
+                }
                 if (recipe.ingredients.isNotBlank()) {
                     Text("Ingredients", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(recipe.ingredients)
+                    Text(ingredients)
                 }
                 if (recipe.instructions.isNotBlank()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("Cooking mode", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                        Switch(checked = cookingMode, onCheckedChange = { cookingMode = it })
+                    }
                     Text("Instructions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(recipe.instructions)
+                    if (cookingMode) steps.forEachIndexed { index, step ->
+                        Row(verticalAlignment = Alignment.Top) {
+                            Checkbox(checked = checkedSteps[index] == true, onCheckedChange = { checkedSteps[index] = it })
+                            Text(step, modifier = Modifier.padding(top = 12.dp).weight(1f))
+                        }
+                    } else Text(recipe.instructions)
                 }
                 if (recipe.sourceUrl.isNotBlank()) Text("Source: ${recipe.sourceUrl}", style = MaterialTheme.typography.bodySmall)
             }
@@ -438,4 +511,115 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onEdit: ()
             }
         }
     )
+}
+
+
+private val plannerDays = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+private val plannerMeals = listOf("Breakfast", "Lunch", "Dinner", "Snack")
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MealPlannerDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, onDismiss: () -> Unit, onSave: (List<PlannedMeal>) -> Unit) {
+    var recipeId by remember { mutableStateOf(recipes.firstOrNull()?.id.orEmpty()) }
+    var day by remember { mutableStateOf("Monday") }
+    var mealType by remember { mutableStateOf("Dinner") }
+    var servings by remember { mutableIntStateOf(2) }
+    var recipeMenu by remember { mutableStateOf(false) }
+    var dayMenu by remember { mutableStateOf(false) }
+    var mealMenu by remember { mutableStateOf(false) }
+    val selectedRecipe = recipes.firstOrNull { it.id == recipeId }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Weekly meal planner") }, text = {
+        Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (recipes.isEmpty()) Text("Add a recipe before planning meals.") else {
+                ExposedDropdownMenuBox(expanded = recipeMenu, onExpandedChange = { recipeMenu = it }) {
+                    OutlinedTextField(selectedRecipe?.title ?: "Choose recipe", {}, readOnly = true, label = { Text("Recipe") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = recipeMenu, onDismissRequest = { recipeMenu = false }) {
+                        recipes.forEach { r -> DropdownMenuItem(text = { Text(r.title) }, onClick = { recipeId = r.id; recipeMenu = false; servings = r.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2 }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = dayMenu, onExpandedChange = { dayMenu = it }) {
+                    OutlinedTextField(day, {}, readOnly = true, label = { Text("Day") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = dayMenu, onDismissRequest = { dayMenu = false }) {
+                        plannerDays.forEach { d -> DropdownMenuItem(text = { Text(d) }, onClick = { day = d; dayMenu = false }) }
+                    }
+                }
+                ExposedDropdownMenuBox(expanded = mealMenu, onExpandedChange = { mealMenu = it }) {
+                    OutlinedTextField(mealType, {}, readOnly = true, label = { Text("Meal") }, modifier = Modifier.menuAnchor().fillMaxWidth())
+                    ExposedDropdownMenu(expanded = mealMenu, onDismissRequest = { mealMenu = false }) {
+                        plannerMeals.forEach { m -> DropdownMenuItem(text = { Text(m) }, onClick = { mealType = m; mealMenu = false }) }
+                    }
+                }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Servings", modifier = Modifier.weight(1f))
+                    IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) { Text("−") }
+                    Text("$servings")
+                    IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) { Text("+") }
+                }
+                Button(enabled = selectedRecipe != null, onClick = {
+                    val r = selectedRecipe ?: return@Button
+                    onSave(plan + PlannedMeal(recipeId = r.id, recipeTitle = r.title, day = day, mealType = mealType, servings = servings))
+                }, modifier = Modifier.fillMaxWidth()) { Text("Add to plan") }
+            }
+            Text("Your week", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            if (plan.isEmpty()) Text("No meals planned yet.")
+            plannerDays.forEach { d ->
+                val entries = plan.filter { it.day == d }.sortedBy { plannerMeals.indexOf(it.mealType) }
+                if (entries.isNotEmpty()) {
+                    Text(d, fontWeight = FontWeight.Bold)
+                    entries.forEach { p ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text("${p.mealType}: ${p.recipeTitle} · ${p.servings}", modifier = Modifier.weight(1f))
+                            IconButton(onClick = { onSave(plan.filterNot { it.id == p.id }) }) { Text("×") }
+                        }
+                    }
+                }
+            }
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { onSave(emptyList()) }) { Text("Clear week") } })
+}
+
+@Composable
+private fun ShoppingListDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, onDismiss: () -> Unit) {
+    val checked = remember { mutableStateMapOf<String, Boolean>() }
+    val recipeMap = recipes.associateBy { it.id }
+    val lines = remember(plan, recipes) {
+        val all = mutableListOf<String>()
+        plan.forEach { meal ->
+            val recipe = recipeMap[meal.recipeId] ?: return@forEach
+            val base = recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2
+            recipe.ingredients.lines().filter { it.isNotBlank() }.forEach { ingredient ->
+                all.add(scaleIngredient(ingredient.trim(), meal.servings, base))
+            }
+        }
+        all.distinctBy { it.lowercase().replace(Regex("\\s+"), " ").trim() }
+    }
+    AlertDialog(onDismissRequest = onDismiss, title = { Text("Shopping list") }, text = {
+        Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text("${plan.size} planned meals", style = MaterialTheme.typography.labelLarge)
+            if (lines.isEmpty()) Text("Plan some meals to build your shopping list.")
+            lines.forEach { line ->
+                Row(verticalAlignment = Alignment.Top) {
+                    Checkbox(checked = checked[line] == true, onCheckedChange = { checked[line] = it })
+                    Text(line, modifier = Modifier.padding(top = 12.dp).weight(1f))
+                }
+            }
+            if (lines.isNotEmpty()) Text("${checked.count { it.value }} of ${lines.size} checked", style = MaterialTheme.typography.labelMedium)
+        }
+    }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+        dismissButton = { TextButton(onClick = { checked.clear() }) { Text("Uncheck all") } })
+}
+
+private fun scaleIngredients(text: String, targetServings: Int, baseServings: Int): String =
+    text.lines().joinToString("\n") { scaleIngredient(it, targetServings, baseServings) }
+
+private fun scaleIngredient(line: String, targetServings: Int, baseServings: Int): String {
+    if (targetServings == baseServings || line.isBlank()) return line
+    val multiplier = targetServings.toDouble() / baseServings.coerceAtLeast(1)
+    val pattern = Regex("^\\s*(\\d+(?:\\.\\d+)?)(.*)$")
+    val match = pattern.find(line) ?: return line
+    val amount = match.groupValues[1].toDoubleOrNull() ?: return line
+    val scaled = amount * multiplier
+    val formatted = if (scaled % 1.0 == 0.0) scaled.toInt().toString() else String.format(java.util.Locale.UK, "%.2f", scaled).trimEnd('0').trimEnd('.')
+    return formatted + match.groupValues[2]
 }
