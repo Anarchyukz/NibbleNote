@@ -1,6 +1,7 @@
 package app.pantrypal
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
@@ -242,11 +243,15 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = RecipeStore(this)
+        val sharedText = intent?.takeIf { it.action == Intent.ACTION_SEND }
+            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+        val sharedUrl = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
                 PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
                     onBackup = { createBackup.launch("PantryPal-backup.json") },
-                    onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) })
+                    onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) },
+                    initialSharedText = sharedText, initialSharedUrl = sharedUrl)
             }
         }
     }
@@ -257,7 +262,8 @@ class MainActivity : ComponentActivity() {
 private fun PantryPalApp(
     initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit,
     initialPlan: List<PlannedMeal>, persistPlan: (List<PlannedMeal>) -> Unit,
-    onBackup: () -> Unit, onRestore: () -> Unit
+    onBackup: () -> Unit, onRestore: () -> Unit,
+    initialSharedText: String = "", initialSharedUrl: String = ""
 ) {
     var recipes by remember { mutableStateOf(initialRecipes) }
     var mealPlan by remember { mutableStateOf(initialPlan) }
@@ -266,7 +272,7 @@ private fun PantryPalApp(
     var search by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Recipe?>(null) }
     var showForm by remember { mutableStateOf(false) }
-    var showImport by remember { mutableStateOf(false) }
+    var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
     var selected by remember { mutableStateOf<Recipe?>(null) }
 
     fun update(next: List<Recipe>) {
@@ -370,6 +376,8 @@ private fun PantryPalApp(
         }
     )
     if (showImport) ImportDialog(
+        initialAddress = initialSharedUrl,
+        sharedText = initialSharedText,
         onDismiss = { showImport = false },
         onManual = { showImport = false; editing = null; showForm = true },
         onImport = { recipe ->
@@ -425,8 +433,14 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
 }
 
 @Composable
-private fun ImportDialog(onDismiss: () -> Unit, onManual: () -> Unit, onImport: (Recipe) -> Unit) {
-    var address by remember { mutableStateOf("") }
+private fun ImportDialog(
+    initialAddress: String = "",
+    sharedText: String = "",
+    onDismiss: () -> Unit,
+    onManual: () -> Unit,
+    onImport: (Recipe) -> Unit
+) {
+    var address by remember { mutableStateOf(initialAddress) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
@@ -435,8 +449,14 @@ private fun ImportDialog(onDismiss: () -> Unit, onManual: () -> Unit, onImport: 
         title = { Text("Import a recipe") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Paste a recipe webpage URL. PantryPal looks for standard structured recipe data.")
-                OutlinedTextField(address, { address = it; error = null }, label = { Text("Recipe URL") }, singleLine = true)
+                Text(if (sharedText.isNotBlank())
+                    "Shared from another app. If a recipe link was included, PantryPal has filled it in below. Tap Import to try saving it."
+                    else "Paste a recipe webpage URL. PantryPal looks for standard structured recipe data.")
+                if (sharedText.isNotBlank() && address.isBlank()) {
+                    Text("This share didn't include a web link. Open the original post, copy its recipe text, then choose Enter manually in PantryPal.",
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                OutlinedTextField(address, { address = it; error = null }, label = { Text("Recipe webpage URL") }, singleLine = true)
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 Text("Some sites block imports or do not publish recipe data.", style = MaterialTheme.typography.bodySmall)
