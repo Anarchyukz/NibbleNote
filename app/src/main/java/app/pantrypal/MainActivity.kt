@@ -400,6 +400,7 @@ private fun PantryPalApp(
     var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
     var showRecipeSearch by remember { mutableStateOf(false) }
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
+    var homeSection by remember { mutableStateOf("My recipes") }
     var selected by remember { mutableStateOf<Recipe?>(null) }
 
     fun update(next: List<Recipe>) {
@@ -425,178 +426,225 @@ private fun PantryPalApp(
     ) { inset ->
         Column(
             Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
+                     Card(
+                shape = RoundedCornerShape(22.dp),
                 colors = CardDefaults.cardColors(containerColor = PantryInk),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("YOUR NEXT FAVOURITE", color = PantryOrange, style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold, letterSpacing = 1.4f.sp)
-                    Text("What are we\ncooking today?", color = androidx.compose.ui.graphics.Color.White,
-                        style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
-                    Text("Find something delicious, or keep your own recipes close at hand.",
-                        color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodyMedium)
-                    Button(
-                        onClick = { showRecipeSearch = true },
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
-                        contentPadding = PaddingValues(vertical = 13.dp)
-                    ) {
-                        Text("Explore recipes online", fontWeight = FontWeight.Bold)
+                Row(
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text("YOUR KITCHEN, ORGANISED", color = PantryOrange,
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
+                        Text("What are we cooking?", color = androidx.compose.ui.graphics.Color.White,
+                            style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text("Save favourites or discover something new.",
+                            color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodySmall)
                     }
-                }
-            }
-
-            OutlinedTextField(
-                value = search, onValueChange = { search = it },
-                label = { Text("Search your saved recipes") },
-                placeholder = { Text("Recipe name or ingredient") },
-                leadingIcon = { Text("⌕", style = MaterialTheme.typography.headlineSmall, color = PantryInk) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(16.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PantryOrange,
-                    focusedLabelColor = PantryInk,
-                    unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                    focusedContainerColor = androidx.compose.ui.graphics.Color.White
-                )
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = { editing = null; showForm = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
-                    contentPadding = PaddingValues(vertical = 12.dp)
-                ) { Text("+ Add recipe", fontWeight = FontWeight.Bold) }
-                OutlinedButton(
-                    onClick = { showImport = true },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp),
-                    contentPadding = PaddingValues(vertical = 12.dp)
-                ) { Text("Import from link") }
-            }
-
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
-                    Text("Meal planner")
-                }
-                OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 11.dp)) {
-                    Text("Shopping list")
+                    Button(
+                        onClick = { selectedBrowseSite = null; showRecipeSearch = true },
+                        shape = RoundedCornerShape(13.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp)
+                    ) {
+                        Text("Explore", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth().background(
+                    androidx.compose.ui.graphics.Color(0xFFECECE8), RoundedCornerShape(16.dp)
+                ).padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text("${recipes.size} SAVED ${if (recipes.size == 1) "RECIPE" else "RECIPES"}",
-                    style = MaterialTheme.typography.labelMedium, color = androidx.compose.ui.graphics.Color(0xFF6B7280),
-                    fontWeight = FontWeight.Bold, letterSpacing = 0.8f.sp)
-                Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                    TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
-                        Text("Backup", style = MaterialTheme.typography.labelMedium)
-                    }
-                    TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
-                        Text("Restore", style = MaterialTheme.typography.labelMedium)
+                listOf("My recipes", "Browse sites").forEach { section ->
+                    val active = homeSection == section
+                    Button(
+                        onClick = { homeSection = section },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (active) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Transparent,
+                            contentColor = if (active) PantryInk else androidx.compose.ui.graphics.Color(0xFF6B7280)
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = if (active) 1.dp else 0.dp),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Text(if (section == "My recipes") "My recipes (${recipes.size})" else "Browse sites",
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
                     }
                 }
             }
 
-            val visible = recipes.filter {
-                it.title.contains(search, true) || it.ingredients.contains(search, true)
-            }
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(top = 2.dp, bottom = 24.dp)
             ) {
-                if (visible.isEmpty()) {
+                if (homeSection == "My recipes") {
                     item {
-                        Column(
-                            Modifier.fillMaxWidth().padding(vertical = 26.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
-                                style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
-                            Spacer(Modifier.height(6.dp))
-                            Text(if (recipes.isEmpty()) "Browse below or add a recipe to get started." else "Try another search.",
-                                color = androidx.compose.ui.graphics.Color(0xFF6B7280))
-                            Spacer(Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = search, onValueChange = { search = it },
+                            label = { Text("Search saved recipes") },
+                            placeholder = { Text("Recipe name or ingredient") },
+                            leadingIcon = { Text("⌕", style = MaterialTheme.typography.headlineSmall, color = PantryInk) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(15.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PantryOrange,
+                                focusedLabelColor = PantryInk,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                            )
+                        )
+                    }
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                             Button(
                                 onClick = { editing = null; showForm = true },
-                                shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
-                            ) { Text("Add a recipe") }
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(13.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk),
+                                contentPadding = PaddingValues(vertical = 11.dp)
+                            ) { Text("+ Add recipe", fontWeight = FontWeight.Bold) }
+                            OutlinedButton(
+                                onClick = { showImport = true },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(13.dp),
+                                contentPadding = PaddingValues(vertical = 11.dp)
+                            ) { Text("Import from link") }
                         }
                     }
-                } else {
-                    items(visible, key = { it.id }) { recipe ->
-                        Card(
-                            onClick = { selected = recipe },
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
-                            modifier = Modifier.fillMaxWidth()
+                    item {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                            OutlinedButton(onClick = { showPlanner = true }, modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(13.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
+                                Text("Meal planner")
+                            }
+                            OutlinedButton(onClick = { showShopping = true }, modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(13.dp), contentPadding = PaddingValues(vertical = 10.dp)) {
+                                Text("Shopping list")
+                            }
+                        }
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Column(Modifier.padding(16.dp)) {
-                                Text(recipe.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
-                                if (recipe.description.isNotBlank()) {
-                                    Spacer(Modifier.height(4.dp))
-                                    Text(recipe.description, maxLines = 2, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                            Text("YOUR RECIPE BOX", style = MaterialTheme.typography.labelMedium,
+                                color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                                fontWeight = FontWeight.Bold, letterSpacing = 0.8f.sp)
+                            Row(horizontalArrangement = Arrangement.spacedBy(0.dp)) {
+                                TextButton(onClick = onBackup, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                                    Text("Backup", style = MaterialTheme.typography.labelMedium)
                                 }
-                                Spacer(Modifier.height(8.dp))
-                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    if (recipe.prepTime.isNotBlank()) Text("Prep ${recipe.prepTime}", style = MaterialTheme.typography.labelSmall)
-                                    if (recipe.cookTime.isNotBlank()) Text("Cook ${recipe.cookTime}", style = MaterialTheme.typography.labelSmall)
-                                    if (recipe.sourceUrl.isNotBlank()) Text("Imported", style = MaterialTheme.typography.labelSmall)
+                                TextButton(onClick = onRestore, colors = ButtonDefaults.textButtonColors(contentColor = PantryInk)) {
+                                    Text("Restore", style = MaterialTheme.typography.labelMedium)
                                 }
                             }
                         }
                     }
-                }
-
-                item {
-                    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(top = 14.dp)) {
-                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                            Text("BROWSE RECIPES", style = MaterialTheme.typography.labelMedium,
-                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.4.sp)
-                            Text("Popular recipe websites", style = MaterialTheme.typography.titleLarge,
-                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
-                            Text("Choose a site, search for a dish, then preview before adding it to your box.",
-                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                    val visible = recipes.filter {
+                        it.title.contains(search, true) || it.ingredients.contains(search, true)
+                    }
+                    if (visible.isEmpty()) {
+                        item {
+                            Column(
+                                Modifier.fillMaxWidth().padding(vertical = 22.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(if (recipes.isEmpty()) "Your recipe box is empty" else "No matching recipes",
+                                    style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold, color = PantryInk)
+                                Text(if (recipes.isEmpty()) "Add a recipe, import a link, or explore the Browse tab."
+                                    else "Try another search.", color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                                if (recipes.isEmpty()) {
+                                    Button(
+                                        onClick = { homeSection = "Browse sites" },
+                                        shape = RoundedCornerShape(13.dp),
+                                        colors = ButtonDefaults.buttonColors(containerColor = PantryOrange, contentColor = PantryInk)
+                                    ) { Text("Browse recipe sites") }
+                                }
+                            }
                         }
-                        listOf(browseSites.take(3), browseSites.drop(3)).forEach { rowSites ->
-                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
-                                rowSites.forEach { site ->
-                                    Card(
-                                        onClick = { selectedBrowseSite = site; showRecipeSearch = true },
-                                        modifier = Modifier.weight(1f),
-                                        shape = RoundedCornerShape(16.dp),
-                                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
-                                    ) {
-                                        Column(
-                                            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 14.dp),
-                                            horizontalAlignment = Alignment.CenterHorizontally,
-                                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
-                                            Text(site.name, style = MaterialTheme.typography.labelMedium,
-                                                fontWeight = FontWeight.Bold, color = PantryInk, maxLines = 2,
-                                                textAlign = androidx.compose.ui.text.style.TextAlign.Center)
-                                        }
+                    } else {
+                        items(visible, key = { it.id }) { recipe ->
+                            Card(
+                                onClick = { selected = recipe },
+                                shape = RoundedCornerShape(17.dp),
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.padding(15.dp)) {
+                                    Text(recipe.title, style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold, color = PantryInk)
+                                    if (recipe.description.isNotBlank()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(recipe.description, maxLines = 2,
+                                            color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                                    }
+                                    Spacer(Modifier.height(7.dp))
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        if (recipe.prepTime.isNotBlank()) Text("Prep ${recipe.prepTime}", style = MaterialTheme.typography.labelSmall)
+                                        if (recipe.cookTime.isNotBlank()) Text("Cook ${recipe.cookTime}", style = MaterialTheme.typography.labelSmall)
+                                        if (recipe.sourceUrl.isNotBlank()) Text("Imported", style = MaterialTheme.typography.labelSmall)
                                     }
                                 }
                             }
                         }
+                    }
+                } else {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)) {
+                            Text("FIND YOUR NEXT FAVOURITE", style = MaterialTheme.typography.labelMedium,
+                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                            Text("Browse recipe websites", style = MaterialTheme.typography.titleLarge,
+                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
+                            Text("Pick a site, search for a dish, then preview it before adding it to your recipe box.",
+                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                        }
+                    }
+                    items((browseSites.size + 1) / 2) { index ->
+                        val rowSites = browseSites.drop(index * 2).take(2)
+                        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
+                            rowSites.forEach { site ->
+                                Card(
+                                    onClick = { selectedBrowseSite = site; showRecipeSearch = true },
+                                    modifier = Modifier.weight(1f),
+                                    shape = RoundedCornerShape(16.dp),
+                                    colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
+                                ) {
+                                    Row(
+                                        Modifier.fillMaxWidth().padding(12.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                    ) {
+                                        Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
+                                        Text(site.name, style = MaterialTheme.typography.labelLarge,
+                                            fontWeight = FontWeight.Bold, color = PantryInk, maxLines = 2)
+                                    }
+                                }
+                            }
+                            if (rowSites.size == 1) Spacer(Modifier.weight(1f))
+                        }
+                    }
+                    item {
+                        OutlinedButton(
+                            onClick = { selectedBrowseSite = null; showRecipeSearch = true },
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(14.dp),
+                            contentPadding = PaddingValues(vertical = 12.dp)
+                        ) { Text("Search all websites") }
+                    }
+                }
+            }          }
                     }
                 }
             }
