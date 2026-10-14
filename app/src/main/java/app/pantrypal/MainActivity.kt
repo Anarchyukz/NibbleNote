@@ -224,7 +224,7 @@ private class RecipeWebSearch {
     suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
         val sitePrefix = siteDomain?.takeIf { it.isNotBlank() }?.let { "site:$it " }.orEmpty()
-        val encoded = URLEncoder.encode("\${sitePrefix}\${query.trim()} recipe", "UTF-8")
+        val encoded = URLEncoder.encode("${sitePrefix}${query.trim()} recipe", "UTF-8")
         val endpoints = listOf(
             "https://www.bing.com/search?q=$encoded&setlang=en-GB",
             "https://html.duckduckgo.com/html/?q=$encoded",
