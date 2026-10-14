@@ -25,6 +25,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -795,65 +797,200 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
     }
     val steps = remember(recipe.instructions) { recipe.instructions.lines().map { it.trim() }.filter { it.isNotBlank() } }
     val checkedSteps = remember(recipe.id, cookingMode) { mutableStateMapOf<Int, Boolean>() }
-    AlertDialog(
+
+    Dialog(
         onDismissRequest = onDismiss,
-        title = { Text(recipe.title) },
-        text = {
-            Column(Modifier.heightIn(max = 520.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                if (recipe.description.isNotBlank()) Text(recipe.description)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Servings", fontWeight = FontWeight.SemiBold)
-                    IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) { Text("−") }
-                    Text("$servings")
-                    IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) { Text("+") }
-                }
-                if (recipe.ingredients.isNotBlank()) {
-                    Text("Ingredients", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    Text(ingredients)
-                }
-                if (recipe.instructions.isNotBlank()) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Cooking mode", fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                        Switch(checked = cookingMode, onCheckedChange = { cookingMode = it })
-                    }
-                    Text("Instructions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                    if (cookingMode) steps.forEachIndexed { index, step ->
-                        Row(verticalAlignment = Alignment.Top) {
-                            Checkbox(checked = checkedSteps[index] == true, onCheckedChange = { checkedSteps[index] = it })
-                            Text(step, modifier = Modifier.padding(top = 12.dp).weight(1f))
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(0.96f).widthIn(max = 560.dp),
+            shape = RoundedCornerShape(28.dp),
+            color = androidx.compose.ui.graphics.Color(0xFFFFFEFA),
+            tonalElevation = 8.dp,
+            shadowElevation = 16.dp
+        ) {
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .background(PantryOrange)
+                        .padding(start = 22.dp, end = 12.dp, top = 20.dp, bottom = 20.dp),
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(
+                            "YOUR RECIPE",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PantryInk.copy(alpha = 0.72f),
+                            letterSpacing = 1.6.sp
+                        )
+                        Text(
+                            recipe.title,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = PantryInk
+                        )
+                        if (recipe.prepTime.isNotBlank() || recipe.cookTime.isNotBlank()) {
+                            Text(
+                                listOfNotNull(
+                                    recipe.prepTime.takeIf { it.isNotBlank() }?.let { "Prep $it" },
+                                    recipe.cookTime.takeIf { it.isNotBlank() }?.let { "Cook $it" }
+                                ).joinToString("  ·  "),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = PantryInk.copy(alpha = 0.8f)
+                            )
                         }
-                    } else Text(recipe.instructions)
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Text("✕", color = PantryInk, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                    }
                 }
-                if (recipe.sourceUrl.isNotBlank()) Text("Source: ${recipe.sourceUrl}", style = MaterialTheme.typography.bodySmall)
-            }
-        },
-        confirmButton = { TextButton(onClick = onEdit) { Text("Edit") } },
-        dismissButton = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                TextButton(
-                    onClick = onImportAnother,
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
-                ) { Text("Import another", maxLines = 1, softWrap = false) }
-                TextButton(
-                    onClick = onDelete,
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
-                ) { Text("Delete", maxLines = 1, softWrap = false) }
-                TextButton(
-                    onClick = onDismiss,
-                    contentPadding = PaddingValues(horizontal = 4.dp),
-                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
-                ) { Text("Close", maxLines = 1, softWrap = false) }
+
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(max = 560.dp)
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 20.dp, vertical = 18.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
+                ) {
+                    if (recipe.description.isNotBlank()) {
+                        Text(
+                            recipe.description,
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = PantryInk.copy(alpha = 0.9f)
+                        )
+                    }
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFF3D6)),
+                        shape = RoundedCornerShape(18.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                Text("SERVINGS", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = PantryInk.copy(alpha = 0.65f))
+                                Text("$servings portions", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = PantryInk)
+                            }
+                            IconButton(onClick = { servings = (servings - 1).coerceAtLeast(1) }) {
+                                Text("−", fontSize = 24.sp, color = PantryInk)
+                            }
+                            Text("$servings", fontWeight = FontWeight.Bold, color = PantryInk)
+                            IconButton(onClick = { servings = (servings + 1).coerceAtMost(100) }) {
+                                Text("+", fontSize = 24.sp, color = PantryInk)
+                            }
+                        }
+                    }
+
+                    if (recipe.ingredients.isNotBlank()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Ingredients", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF4F5F2)),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    ingredients.lines().filter { it.isNotBlank() }.forEach { ingredient ->
+                                        Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                            Text("•", color = PantryOrange, fontWeight = FontWeight.ExtraBold, fontSize = 18.sp)
+                                            Text(ingredient, modifier = Modifier.weight(1f), color = PantryInk, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (recipe.instructions.isNotBlank()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text("Method", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                                Text("Step by step", style = MaterialTheme.typography.bodySmall, color = PantryInk.copy(alpha = 0.65f))
+                            }
+                            Text("Cooking mode", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold, color = PantryInk)
+                            Switch(checked = cookingMode, onCheckedChange = { cookingMode = it })
+                        }
+                        if (cookingMode) {
+                            steps.forEachIndexed { index, step ->
+                                Card(
+                                    colors = CardDefaults.cardColors(
+                                        containerColor = if (checkedSteps[index] == true) androidx.compose.ui.graphics.Color(0xFFE8F5E9)
+                                        else androidx.compose.ui.graphics.Color(0xFFF4F5F2)
+                                    ),
+                                    shape = RoundedCornerShape(16.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(8.dp),
+                                        verticalAlignment = Alignment.Top
+                                    ) {
+                                        Checkbox(
+                                            checked = checkedSteps[index] == true,
+                                            onCheckedChange = { checkedSteps[index] = it }
+                                        )
+                                        Column(modifier = Modifier.weight(1f).padding(top = 10.dp, end = 8.dp)) {
+                                            Text("STEP ${index + 1}", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.ExtraBold, color = PantryOrange)
+                                            Text(step, color = PantryInk, style = MaterialTheme.typography.bodyLarge)
+                                        }
+                                    }
+                                }
+                            }
+                        } else {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF4F5F2)),
+                                shape = RoundedCornerShape(18.dp)
+                            ) {
+                                Text(
+                                    recipe.instructions,
+                                    modifier = Modifier.fillMaxWidth().padding(16.dp),
+                                    color = PantryInk,
+                                    style = MaterialTheme.typography.bodyLarge
+                                )
+                            }
+                        }
+                    }
+
+                    if (recipe.sourceUrl.isNotBlank()) {
+                        Text("Source: ${recipe.sourceUrl}", style = MaterialTheme.typography.bodySmall, color = PantryInk.copy(alpha = 0.6f))
+                    }
+                }
+
+                HorizontalDivider(color = androidx.compose.ui.graphics.Color(0xFFE7E5DF))
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(
+                        onClick = onImportAnother,
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                        modifier = Modifier.weight(1.25f)
+                    ) { Text("Import another", maxLines = 1, softWrap = false) }
+                    TextButton(
+                        onClick = onDelete,
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                        modifier = Modifier.weight(0.7f)
+                    ) { Text("Delete", maxLines = 1, softWrap = false) }
+                    TextButton(
+                        onClick = onDismiss,
+                        contentPadding = PaddingValues(horizontal = 5.dp),
+                        modifier = Modifier.weight(0.65f)
+                    ) { Text("Close", maxLines = 1, softWrap = false) }
+                    Button(
+                        onClick = onEdit,
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+                        modifier = Modifier.weight(0.8f),
+                        shape = RoundedCornerShape(14.dp)
+                    ) { Text("Edit", maxLines = 1, softWrap = false) }
+                }
             }
         }
-    )
+    }
 }
-
 
 private val plannerDays = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
 private val plannerMeals = listOf("Breakfast", "Lunch", "Dinner", "Snack")
