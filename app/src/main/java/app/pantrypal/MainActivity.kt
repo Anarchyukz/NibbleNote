@@ -765,10 +765,26 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
         },
         confirmButton = { TextButton(onClick = onEdit) { Text("Edit") } },
         dismissButton = {
-            Row {
-                TextButton(onClick = onImportAnother) { Text("Import another") }
-                TextButton(onClick = onDelete) { Text("Delete") }
-                TextButton(onClick = onDismiss) { Text("Close") }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(
+                    onClick = onImportAnother,
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
+                ) { Text("Import another", maxLines = 1, softWrap = false) }
+                TextButton(
+                    onClick = onDelete,
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
+                ) { Text("Delete", maxLines = 1, softWrap = false) }
+                TextButton(
+                    onClick = onDismiss,
+                    contentPadding = PaddingValues(horizontal = 4.dp),
+                    modifier = Modifier.defaultMinSize(minWidth = 0.dp)
+                ) { Text("Close", maxLines = 1, softWrap = false) }
             }
         }
     )
