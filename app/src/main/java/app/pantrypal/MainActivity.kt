@@ -1383,9 +1383,7 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit) {
                                     canGoBack = view?.canGoBack() == true
                                     // Hide common ad containers, especially persistent bottom banners.
                                     view?.evaluateJavascript(
-                                        "(function(){var s=document.createElement('style');s.textContent=" +
-                                            "'ins.adsbygoogle,[id*=google_ads],[id*=\\"sticky-ad\\"],[class*=\\"sticky-ad\\"],[id*=\\"bottom-ad\\"],[class*=\\"bottom-ad\\"],[class*=\\"ad-banner\\"],[data-testid*=\\"ad-container\\"]{display:none!important;visibility:hidden!important;height:0!important;max-height:0!important;pointer-events:none!important}';" +
-                                            "document.documentElement.appendChild(s);})();",
+                                        """(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id*=google_ads],[id*="sticky-ad"],[class*="sticky-ad"],[id*="bottom-ad"],[class*="bottom-ad"],[class*="ad-banner"],[data-testid*="ad-container"]{display:none!important;visibility:hidden!important;height:0!important;max-height:0!important;pointer-events:none!important}';document.documentElement.appendChild(s);})();""",
                                         null
                                     )
                                 }
