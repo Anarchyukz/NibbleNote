@@ -271,15 +271,19 @@ private class RecipeWebSearch {
                     }
                     val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
                         .replace(Regex("""\s+"""), " ").trim()
-                    val lowerLink = link.lowercase()
-                    val blockedHost = listOf(
-                        "bing.com", "microsoft.com", "duckduckgo.com", "google.com",
-                        "facebook.com", "instagram.com", "youtube.com", "w3.org"
-                    ).any { lowerLink.contains(it) }
+                    val resultHost = try { URL(link).host.lowercase().removePrefix("www.") } catch (_: Exception) { "" }
+                    // Search only the cooking sites PantryPal presents in Browse sites.
+                    // Generic search engines also return encyclopedias (e.g. Wikipedia/Britannica),
+                    // which are not useful recipe results for an ingredient search like "fish".
+                    val allowedRecipeDomains = if (!siteDomain.isNullOrBlank()) listOf(siteDomain.lowercase().removePrefix("www."))
+                        else browseSites.map { it.domain.lowercase().removePrefix("www.") }
+                    val isRecipeSite = allowedRecipeDomains.any { domain ->
+                        resultHost == domain || resultHost.endsWith(".$domain")
+                    }
                     val resultClass = classes.contains("result__a") || classes.contains("result-link") ||
                         classes.contains("b_algo") || classes.contains("b_title")
                     if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
-                        blockedHost || title.length < 3 ||
+                        !isRecipeSite || title.length < 3 ||
                         title.lowercase() in listOf("images", "videos", "maps", "news", "shopping", "sign in", "more")) {
                         return@mapNotNull null
                     }
