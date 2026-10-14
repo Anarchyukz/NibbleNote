@@ -220,6 +220,13 @@ private val browseSites = listOf(
 
 private data class RecipeSearchResult(val title: String, val url: String)
 
+private val randomBrowseQueries = listOf(
+    "easy dinner", "chicken recipes", "pasta recipes", "fish recipes",
+    "vegetarian recipes", "quick lunch", "dessert recipes", "breakfast recipes",
+    "soup recipes", "curry recipes", "traybake recipes", "healthy recipes",
+    "slow cooker recipes", "rice recipes", "baking recipes", "salad recipes"
+)
+
 private class RecipeWebSearch {
     suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
@@ -822,12 +829,36 @@ private fun ImportDialog(
 
 @Composable
 private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
-    var query by remember(site?.domain) { mutableStateOf("") }
+    var query by remember(site?.domain) {
+        mutableStateOf(if (site != null) randomBrowseQueries.random() else "")
+    }
     var results by remember { mutableStateOf<List<RecipeSearchResult>>(emptyList()) }
     var searching by remember { mutableStateOf(false) }
     var importingUrl by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+
+    fun loadResults(term: String, shuffle: Boolean) {
+        if (term.isBlank() || searching || importingUrl != null) return
+        searching = true
+        error = null
+        results = emptyList()
+        scope.launch {
+            try {
+                val found = RecipeWebSearch().search(term, site?.domain)
+                results = if (shuffle) found.shuffled().take(10) else found
+                if (results.isEmpty()) error = "No recipes found on " + (site?.name ?: "the supported recipe sites") + ". Try another search."
+            } catch (e: Exception) {
+                error = e.message ?: "Search failed. Try again."
+            } finally {
+                searching = false
+            }
+        }
+    }
+
+    LaunchedEffect(site?.domain) {
+        if (site != null) loadResults(query, true)
+    }
 
     AlertDialog(
         onDismissRequest = { if (!searching && importingUrl == null) onDismiss() },
@@ -837,8 +868,8 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, 
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(site?.let { "Search ${it.name} for a dish or ingredient. Results open as a preview and are only saved when you tap Add to box." }
-                    ?: "Search the web for recipes from popular cooking websites, then preview a result before adding it to PantryPal.")
+                Text(site?.let { "Here are 10 recipe ideas from ${it.name}. Each time you open this site, PantryPal picks a different recipe search. Preview a recipe to read its ingredients and method; it is only saved when you tap Add to box." }
+                    ?: "Search the supported cooking websites for recipes, then preview a result before adding it to PantryPal.")
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
@@ -847,20 +878,24 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, onDismiss: () -> Unit, 
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                Button(
-                    enabled = query.isNotBlank() && !searching && importingUrl == null,
-                    onClick = {
-                        searching = true
-                        error = null
-                        results = emptyList()
-                        scope.launch {
-                            try { results = RecipeWebSearch().search(query, site?.domain) }
-                            catch (e: Exception) { error = e.message ?: "Search failed. Try again." }
-                            finally { searching = false }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth()
-                ) { Text(if (searching) "Searching…" else "Search the web") }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                    Button(
+                        enabled = query.isNotBlank() && !searching && importingUrl == null,
+                        onClick = { loadResults(query, false) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (searching) "Searching…" else "Search recipes") }
+                    if (site != null) {
+                        OutlinedButton(
+                            enabled = !searching && importingUrl == null,
+                            onClick = {
+                                query = randomBrowseQueries.filterNot { it == query }.randomOrNull()
+                                    ?: randomBrowseQueries.random()
+                                loadResults(query, true)
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("Shuffle 10") }
+                    }
+                }
                 if (searching || importingUrl != null) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 results.forEach { result ->
