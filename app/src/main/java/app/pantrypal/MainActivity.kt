@@ -390,6 +390,7 @@ private fun PantryPalApp(
         RecipeDetailDialog(
             recipe = recipe,
             onDismiss = { selected = null },
+            onImportAnother = { selected = null; showImport = true },
             onEdit = { editing = recipe; selected = null; showForm = true },
             onDelete = {
                 update(recipes.filterNot { it.id == recipe.id })
@@ -483,7 +484,7 @@ private fun ImportDialog(
 }
 
 @Composable
-private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
     var cookingMode by remember(recipe.id) { mutableStateOf(false) }
     var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
     val ingredients = remember(recipe.ingredients, servings, recipe.servings) {
@@ -526,6 +527,7 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onEdit: ()
         confirmButton = { TextButton(onClick = onEdit) { Text("Edit") } },
         dismissButton = {
             Row {
+                TextButton(onClick = onImportAnother) { Text("Import another") }
                 TextButton(onClick = onDelete) { Text("Delete") }
                 TextButton(onClick = onDismiss) { Text("Close") }
             }
