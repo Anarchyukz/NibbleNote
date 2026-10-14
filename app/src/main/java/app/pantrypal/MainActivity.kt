@@ -855,57 +855,90 @@ private fun ImportDialog(
     onManual: () -> Unit,
     onImport: (Recipe) -> Unit
 ) {
+    fun removeLinks(text: String): String = text
+        .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "")
+        .replace(Regex("\\s+"), " ")
+        .trim()
+
     var address by remember { mutableStateOf(initialAddress) }
+    var caption by remember { mutableStateOf(removeLinks(sharedText)) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
+    val socialSource = when {
+        address.contains("instagram.com", true) || sharedText.contains("instagram.com", true) -> "Instagram"
+        address.contains("tiktok.com", true) || sharedText.contains("tiktok.com", true) -> "TikTok"
+        else -> null
+    }
     AlertDialog(
         onDismissRequest = { if (!loading) onDismiss() },
-        title = { Text("Import a recipe") },
+        title = { Text(if (socialSource != null) "Import from $socialSource" else "Import a recipe") },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(if (sharedText.isNotBlank())
-                    "Shared from another app. PantryPal will try the link first, but Instagram and TikTok often hide recipe details from automatic import."
-                    else "Paste a recipe webpage URL. PantryPal looks for standard structured recipe data.")
-                if (sharedText.isNotBlank() && address.isBlank()) {
-                    Text("No web link was included. You can still create a recipe draft from the shared caption, or copy the caption from the original post.",
-                        style = MaterialTheme.typography.bodySmall)
-                }
-                OutlinedTextField(address, { address = it; error = null }, label = { Text("Recipe webpage URL") }, singleLine = true)
-                if (sharedText.isNotBlank()) {
+            Column(
+                modifier = Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    if (socialSource != null)
+                        "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
+                    else if (sharedText.isNotBlank())
+                        "Shared from another app. PantryPal will try the link first. If the page cannot be read, you can use the shared text to make a draft."
+                    else
+                        "Paste a recipe webpage URL. PantryPal looks for structured recipe data on the page."
+                )
+                OutlinedTextField(
+                    value = address,
+                    onValueChange = { address = it.trimStart(); error = null },
+                    label = { Text("Recipe or social post URL") },
+                    placeholder = { Text("https://…") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                if (sharedText.isNotBlank() || socialSource != null) {
+                    OutlinedTextField(
+                        value = caption,
+                        onValueChange = { caption = it; error = null },
+                        label = { Text("Post caption, ingredients or steps") },
+                        placeholder = { Text("Paste the caption or recipe text here…") },
+                        minLines = 3,
+                        maxLines = 6,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Text(
+                        "Tip: in Instagram or TikTok, open the post, copy its caption or recipe text, then paste it here. PantryPal cannot reliably read text baked into a video.",
+                        style = MaterialTheme.typography.bodySmall
+                    )
                     OutlinedButton(
+                        enabled = caption.isNotBlank(),
                         onClick = {
-                            val cleanText = sharedText
-                                .replace(Regex("https?://\\S+", RegexOption.IGNORE_CASE), "")
-                                .replace(Regex("\\s+"), " ")
-                                .trim()
-                            val titleCandidate = cleanText.lineSequence()
-                                .map { it.trim().trim('-', '•', '|') }
-                                .firstOrNull { it.isNotBlank() }
+                            val cleaned = caption.trim()
+                            val titleCandidate = cleaned.lineSequence()
+                                .map { it.trim().trim('-', '•', '|', '#') }
+                                .firstOrNull { it.isNotBlank() && !it.startsWith("http", true) }
                                 ?.take(80)
                             val source = address.ifBlank {
                                 Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
                             }
-                            val socialName = when {
+                            val sourceName = when {
                                 source.contains("instagram.com", true) -> "Instagram"
                                 source.contains("tiktok.com", true) -> "TikTok"
                                 else -> "shared post"
                             }
                             onImport(
                                 Recipe(
-                                    title = titleCandidate?.takeIf { it.isNotBlank() } ?: "Recipe from $socialName",
-                                    description = "Draft created from shared post text. Check the original post for any missing ingredients or steps.",
-                                    instructions = sharedText.trim(),
+                                    title = titleCandidate?.takeIf { it.isNotBlank() } ?: "Recipe from $sourceName",
+                                    description = "Draft from social post text. Check quantities and cooking steps against the original post.",
+                                    ingredients = "",
+                                    instructions = cleaned,
                                     sourceUrl = source
                                 )
                             )
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Create recipe draft from shared text") }
+                    ) { Text("Make draft from caption / text") }
                 }
                 if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                 error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-                Text("If a social post cannot be read automatically, share its caption/text to PantryPal or paste the caption into a draft.", style = MaterialTheme.typography.bodySmall)
             }
         },
         confirmButton = {
@@ -913,11 +946,16 @@ private fun ImportDialog(
                 loading = true
                 error = null
                 scope.launch {
-                    try { onImport(RecipeImporter().import(address)) }
-                    catch (e: Exception) { error = e.message ?: "Import failed. Try manual entry." }
-                    finally { loading = false }
+                    try {
+                        onImport(RecipeImporter().import(address))
+                    } catch (e: Exception) {
+                        error = (e.message ?: "Automatic import failed.") +
+                            if (socialSource != null) " Paste the caption or recipe text above to create a draft instead." else " Try manual entry."
+                    } finally {
+                        loading = false
+                    }
                 }
-            }) { Text(if (loading) "Importing…" else "Import") }
+            }) { Text(if (loading) "Importing…" else "Try link import") }
         },
         dismissButton = {
             Row {
