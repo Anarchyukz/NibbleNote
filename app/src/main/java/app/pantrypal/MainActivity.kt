@@ -379,7 +379,7 @@ private fun PantryPalApp(
             ) {
                 Column(Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     Text("YOUR NEXT FAVOURITE", color = PantryOrange, style = MaterialTheme.typography.labelMedium,
-                        fontWeight = FontWeight.Bold, letterSpacing = androidx.compose.ui.unit.sp(1.4f))
+                        fontWeight = FontWeight.Bold, letterSpacing = 1.4f.sp)
                     Text("What are we\ncooking today?", color = androidx.compose.ui.graphics.Color.White,
                         style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.ExtraBold)
                     Text("Find something delicious, or keep your own recipes close at hand.",
