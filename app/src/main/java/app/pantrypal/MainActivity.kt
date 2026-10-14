@@ -224,8 +224,7 @@ private class RecipeWebSearch {
     suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
         val sitePrefix = siteDomain?.takeIf { it.isNotBlank() }?.let { "site:$it " }.orEmpty()
-        val encoded = URLEncoder.encode("${sitePrefix}${query.trim()} recipe", "UTF-8")
-        // Search providers can change their markup or block automated requests, so use a fallback.
+        val encoded = URLEncoder.encode("\${sitePrefix}\${query.trim()} recipe", "UTF-8")
         val endpoints = listOf(
             "https://www.bing.com/search?q=$encoded&setlang=en-GB",
             "https://html.duckduckgo.com/html/?q=$encoded",
@@ -245,18 +244,12 @@ private class RecipeWebSearch {
                 val status = connection.responseCode
                 if (status !in 200..299) throw IllegalStateException("Search provider returned HTTP $status.")
                 val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-                // Bing organic results use h2 links; DuckDuckGo uses result-link classes.
                 val isBing = endpoint.contains("bing.com")
-                val anchors = if (isBing) {
-                    Regex("""(?is)<h2\b[^>]*>\s*<a\b([^>]*)>(.*?)</a>""").findAll(html)
-                } else {
-                    Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
-                }
-                val results = anchors.mapNotNull { match ->
+                val anchors = Regex("""(?is)<a\b([^>]*)>(.*?)</a>""").findAll(html)
+                val parsed = anchors.mapNotNull { match ->
                     val attributes = match.groupValues[1]
                     val classes = Regex("""(?is)\bclass\s*=\s*["']([^"']*)["']""")
                         .find(attributes)?.groupValues?.get(1).orEmpty()
-                    if (!isBing && !classes.contains("result__a") && !classes.contains("result-link")) return@mapNotNull null
                     val rawHref = Regex("""(?is)\bhref\s*=\s*["']([^"']+)["']""")
                         .find(attributes)?.groupValues?.get(1) ?: return@mapNotNull null
                     var link = decodeHtml(rawHref.trim())
@@ -265,17 +258,39 @@ private class RecipeWebSearch {
                         val target = Regex("[?&]uddg=([^&]+)").find(link)?.groupValues?.get(1)
                         if (target != null) link = URLDecoder.decode(target, "UTF-8")
                     }
+                    if (isBing && link.contains("bing.com/ck/a")) {
+                        val target = Regex("[?&]u=([^&]+)").find(link)?.groupValues?.get(1)
+                        if (target != null) {
+                            val encodedTarget = URLDecoder.decode(target, "UTF-8")
+                            val payload = if (encodedTarget.startsWith("a1")) encodedTarget.substring(2) else encodedTarget
+                            val decodedTarget = try {
+                                String(java.util.Base64.getUrlDecoder().decode(payload), Charsets.UTF_8)
+                            } catch (_: Exception) { "" }
+                            if (decodedTarget.startsWith("http://") || decodedTarget.startsWith("https://")) link = decodedTarget
+                        }
+                    }
                     val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
                         .replace(Regex("""\s+"""), " ").trim()
+                    val lowerLink = link.lowercase()
+                    val blockedHost = listOf(
+                        "bing.com", "microsoft.com", "duckduckgo.com", "google.com",
+                        "facebook.com", "instagram.com", "youtube.com", "w3.org"
+                    ).any { lowerLink.contains(it) }
+                    val resultClass = classes.contains("result__a") || classes.contains("result-link") ||
+                        classes.contains("b_algo") || classes.contains("b_title")
                     if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
-                        link.contains("duckduckgo.com") || link.contains("bing.com") ||
-                        link.contains("microsoft.com") || title.isBlank()) {
+                        blockedHost || title.length < 3 ||
+                        title.lowercase() in listOf("images", "videos", "maps", "news", "shopping", "sign in", "more")) {
                         return@mapNotNull null
                     }
-                    RecipeSearchResult(title, link)
-                }.distinctBy { it.url }.take(12).toList()
-                if (results.isNotEmpty()) return@withContext results
-                lastError = IllegalStateException("The search page loaded, but no recipe results could be read.")
+                    val inBingResultBlock = isBing && html.substring(0, match.range.first)
+                        .takeLast(600).contains("b_algo", ignoreCase = true)
+                    Triple(RecipeSearchResult(title, link), if (resultClass || inBingResultBlock) 0 else 1, match.range.first)
+                }.distinctBy { it.first.url }
+                    .sortedWith(compareBy<Triple<RecipeSearchResult, Int, Int>> { it.second }.thenBy { it.third })
+                    .map { it.first }.take(12)
+                if (parsed.isNotEmpty()) return@withContext parsed
+                lastError = IllegalStateException("Search provider responded, but its links could not be identified.")
             } catch (e: Exception) {
                 lastError = e
             } finally {
@@ -287,7 +302,6 @@ private class RecipeWebSearch {
             lastError
         )
     }
-
 
     suspend fun fetchImage(pageUrl: String): String? = withContext(Dispatchers.IO) {
         val connection = try {
