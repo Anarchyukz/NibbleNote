@@ -516,6 +516,7 @@ private fun PantryPalApp(
                 }
             }
 
+            key(recipes.map { it.id }) {
             LazyColumn(
                 modifier = Modifier.weight(1f),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -663,13 +664,18 @@ private fun PantryPalApp(
                     }
                 }
             }
+            }
         }
     }
 
     browsingUrl?.let { startUrl ->
         RecipeBrowserDialog(
             initialUrl = startUrl,
-            onDismiss = { browsingUrl = null }
+            onDismiss = { browsingUrl = null },
+            onImport = { recipe ->
+                browsingUrl = null
+                selected = recipe
+            }
         )
     }
 
@@ -1305,8 +1311,11 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
 }
 
 @Composable
-private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit) {
+private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var importingPage by remember(initialUrl) { mutableStateOf(false) }
+    var importError by remember(initialUrl) { mutableStateOf<String?>(null) }
     var currentUrl by remember(initialUrl) { mutableStateOf(initialUrl) }
     var pageTitle by remember(initialUrl) { mutableStateOf("Recipe website") }
     var progress by remember(initialUrl) { mutableIntStateOf(0) }
@@ -1352,9 +1361,42 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit) {
                         )
                     }
                     TextButton(
-                        onClick = onDismiss,
+                        enabled = !importingPage && currentUrl.startsWith("http"),
+                        onClick = {
+                            val url = currentUrl
+                            importingPage = true
+                            importError = null
+                            scope.launch {
+                                try {
+                                    val recipe = RecipeImporter().import(url)
+                                    onImport(recipe)
+                                } catch (e: Exception) {
+                                    importError = e.message ?: "Couldn't import a recipe from this page."
+                                } finally {
+                                    importingPage = false
+                                }
+                            }
+                        },
                         colors = ButtonDefaults.textButtonColors(contentColor = PantryOrange)
+                    ) {
+                        Text(if (importingPage) "Importing…" else "Import", fontWeight = FontWeight.Bold)
+                    }
+                    TextButton(
+                        onClick = onDismiss,
+                        colors = ButtonDefaults.textButtonColors(contentColor = androidx.compose.ui.graphics.Color.White)
                     ) { Text("Done", fontWeight = FontWeight.Bold) }
+                }
+                importError?.let { message ->
+                    Surface(color = androidx.compose.ui.graphics.Color(0xFFFFF3E0)) {
+                        Row(
+                            Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(message, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodySmall)
+                            TextButton(onClick = { importError = null }) { Text("Dismiss") }
+                        }
+                    }
                 }
                 if (progress in 1..99) {
                     LinearProgressIndicator(
