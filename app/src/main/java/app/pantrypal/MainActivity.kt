@@ -279,18 +279,10 @@ private class RecipeWebSearch {
                     val title = decodeHtml(match.groupValues[2].replace(Regex("""(?is)<[^>]+>"""), ""))
                         .replace(Regex("""\s+"""), " ").trim()
                     val resultHost = try { URL(link).host.lowercase().removePrefix("www.") } catch (_: Exception) { "" }
-                    // Search only the cooking sites PantryPal presents in Browse sites.
-                    // Generic search engines also return encyclopedias (e.g. Wikipedia/Britannica),
-                    // which are not useful recipe results for an ingredient search like "fish".
-                    val allowedRecipeDomains = if (!siteDomain.isNullOrBlank()) listOf(siteDomain.lowercase().removePrefix("www."))
-                        else browseSites.map { it.domain.lowercase().removePrefix("www.") }
-                    val isRecipeSite = allowedRecipeDomains.any { domain ->
-                        resultHost == domain || resultHost.endsWith(".$domain")
-                    }
                     val resultClass = classes.contains("result__a") || classes.contains("result-link") ||
                         classes.contains("b_algo") || classes.contains("b_title")
                     if ((!link.startsWith("https://") && !link.startsWith("http://")) ||
-                        !isRecipeSite || title.length < 3 ||
+                        title.length < 3 ||
                         title.lowercase() in listOf("images", "videos", "maps", "news", "shopping", "sign in", "more")) {
                         return@mapNotNull null
                     }
@@ -611,28 +603,7 @@ private fun PantryPalApp(
                         }
                     } else {
                         items(visible, key = { it.id }) { recipe ->
-                            Card(
-                                onClick = { selected = recipe },
-                                shape = RoundedCornerShape(17.dp),
-                                colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(Modifier.padding(15.dp)) {
-                                    Text(recipe.title, style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.Bold, color = PantryInk)
-                                    if (recipe.description.isNotBlank()) {
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(recipe.description, maxLines = 2,
-                                            color = androidx.compose.ui.graphics.Color(0xFF6B7280))
-                                    }
-                                    Spacer(Modifier.height(7.dp))
-                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        if (recipe.prepTime.isNotBlank()) Text("Prep ${recipe.prepTime}", style = MaterialTheme.typography.labelSmall)
-                                        if (recipe.cookTime.isNotBlank()) Text("Cook ${recipe.cookTime}", style = MaterialTheme.typography.labelSmall)
-                                        if (recipe.sourceUrl.isNotBlank()) Text("Imported", style = MaterialTheme.typography.labelSmall)
-                                    }
-                                }
-                            }
+                            SavedRecipeCard(recipe = recipe, onClick = { selected = recipe })
                         }
                     }
                 } else {
@@ -744,6 +715,87 @@ private fun PantryPalApp(
                 selected = null
             }
         )
+    }
+}
+
+@Composable
+private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
+    val imageUrl by produceState<String?>(initialValue = null, key1 = recipe.sourceUrl) {
+        value = if (recipe.sourceUrl.isNotBlank()) RecipeWebSearch().fetchImage(recipe.sourceUrl) else null
+    }
+    val title = recipe.title.lowercase()
+    val foodEmoji = when {
+        listOf("fish", "salmon", "tuna", "prawn", "shrimp", "seafood").any { it in title } -> "🐟"
+        listOf("chicken", "turkey", "roast", "beef", "steak", "pork", "meat").any { it in title } -> "🍗"
+        listOf("cake", "bake", "cookie", "brownie", "dessert", "pudding").any { it in title } -> "🍰"
+        listOf("salad", "vegetable", "veggie", "vegan").any { it in title } -> "🥗"
+        listOf("pasta", "spaghetti", "lasagne", "noodle").any { it in title } -> "🍝"
+        listOf("soup", "stew", "curry", "chilli").any { it in title } -> "🍲"
+        listOf("bread", "toast", "sandwich", "bagel").any { it in title } -> "🥪"
+        listOf("rice", "bowl").any { it in title } -> "🍚"
+        else -> "🍽️"
+    }
+    Card(
+        onClick = onClick,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            Box(
+                modifier = Modifier.fillMaxWidth().height(148.dp)
+                    .background(androidx.compose.ui.graphics.Color(0xFFFFF1D6)),
+                contentAlignment = Alignment.Center
+            ) {
+                if (!imageUrl.isNullOrBlank()) {
+                    AsyncImage(
+                        model = imageUrl,
+                        contentDescription = recipe.title,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Text(foodEmoji, style = MaterialTheme.typography.displayLarge)
+                }
+                if (recipe.sourceUrl.isNotBlank()) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.94f),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text("IMPORTED", modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = PantryInk)
+                    }
+                }
+            }
+            Column(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+                verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(recipe.title, style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold, color = PantryInk, maxLines = 2)
+                if (recipe.description.isNotBlank()) {
+                    Text(recipe.description, maxLines = 2,
+                        color = androidx.compose.ui.graphics.Color(0xFF6B7280),
+                        style = MaterialTheme.typography.bodySmall)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (recipe.prepTime.isNotBlank()) {
+                        Surface(color = androidx.compose.ui.graphics.Color(0xFFFFF1D6), shape = RoundedCornerShape(8.dp)) {
+                            Text("⏱ ${recipe.prepTime}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                style = MaterialTheme.typography.labelSmall, color = PantryInk)
+                        }
+                    }
+                    if (recipe.cookTime.isNotBlank()) {
+                        Surface(color = androidx.compose.ui.graphics.Color(0xFFF3F4F6), shape = RoundedCornerShape(8.dp)) {
+                            Text("🔥 ${recipe.cookTime}", modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
+                                style = MaterialTheme.typography.labelSmall, color = PantryInk)
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    Text("View recipe  →", style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold, color = PantryOrange)
+                }
+            }
+        }
     }
 }
 
