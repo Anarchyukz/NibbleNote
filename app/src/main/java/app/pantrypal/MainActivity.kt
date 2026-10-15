@@ -1868,9 +1868,13 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                     )
                 }
                 AndroidView(
-                    modifier = Modifier.fillMaxSize(),
+                    // The browser must occupy only the space below the toolbar; fillMaxSize()
+                    // inside this Column can give it a height larger than the remaining viewport.
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
                     factory = { viewContext ->
                         WebView(viewContext).apply {
+                            isFocusable = true
+                            isFocusableInTouchMode = true
                             settings.javaScriptEnabled = true
                             settings.domStorageEnabled = true
                             settings.loadsImagesAutomatically = true
