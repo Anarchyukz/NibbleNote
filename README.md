@@ -11,7 +11,10 @@
 - Versioned APK releases can be published from a `v*` tag.
 
 ## Download and install
-Open the [latest PantryPal build](https://github.com/Anarchyukz/PantryPal/actions). Select the latest successful run, scroll to **Artifacts**, and download `PantryPal-APK`. Extract the ZIP and install the APK on your Android device.
+
+**[Download PantryPal for Android (APK)](https://github.com/Anarchyukz/PantryPal/releases/latest/download/app-debug.apk)** — this direct link downloads the APK attached to the latest published GitHub Release.
+
+For the newest development build before it has been published as a release, open the [latest successful GitHub Actions build](https://github.com/Anarchyukz/PantryPal/actions), select the successful run, and download `PantryPal-APK` from **Artifacts**. Extract the ZIP and install the APK on your Android device.
 
 The automated build uses Android's debug signing key unless release-signing secrets are configured in GitHub. For a stable signing identity across future updates, configure `PANTRYPAL_KEYSTORE_BASE64`, `PANTRYPAL_KEYSTORE_PASSWORD`, `PANTRYPAL_KEY_ALIAS` and `PANTRYPAL_KEY_PASSWORD` as repository Actions secrets before distributing signed release builds. Never commit signing keys or passwords.
 
