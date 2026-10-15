@@ -419,10 +419,10 @@ private class RecipeWebSearch {
         try {
             if (connection.responseCode !in 200..299) return@withContext false
             val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
-            val scripts = Regex("""(?is)<script\\b([^>]*)>(.*?)</script>""").findAll(html)
+            val scripts = Regex("""(?is)<script\b([^>]*)>(.*?)</script>""").findAll(html)
             scripts.any { match ->
                 val attributes = match.groupValues[1]
-                val type = Regex("""(?is)\\btype\\s*=\\s*["']([^"']+)["']""")
+                val type = Regex("""(?is)\btype\s*=\s*["']([^"']+)["']""")
                     .find(attributes)?.groupValues?.get(1).orEmpty()
                 if (!type.equals("application/ld+json", ignoreCase = true)) {
                     false
