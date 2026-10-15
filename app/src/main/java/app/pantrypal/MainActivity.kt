@@ -2214,7 +2214,7 @@ private fun ShoppingListDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, o
                 all.add(scaleIngredient(ingredient.trim(), meal.servings, base))
             }
         }
-        all.distinctBy { it.lowercase().replace(Regex("\\s+"), " ").trim() }
+        combineShoppingIngredients(all)
     }
     AlertDialog(onDismissRequest = onDismiss, title = { Text("Shopping list") }, text = {
         Column(Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -2230,6 +2230,58 @@ private fun ShoppingListDialog(recipes: List<Recipe>, plan: List<PlannedMeal>, o
         }
     }, confirmButton = { TextButton(onClick = onDismiss) { Text("Done") } },
         dismissButton = { TextButton(onClick = { checked.clear() }) { Text("Uncheck all") } })
+}
+
+
+/** Merge repeated shopping-list ingredients across planned meals and add their quantities. */
+private fun combineShoppingIngredients(ingredients: List<String>): List<String> {
+    data class Entry(val key: String, var display: String, var amount: Double?, val suffix: String)
+    val entries = linkedMapOf<String, Entry>()
+    val amountPattern = Regex("^\\s*(\\d+(?:\\.\\d+)?)(?:\\s+)(.+?)\\s*$")
+
+    for (raw in ingredients) {
+        val line = raw.trim()
+        if (line.isBlank()) continue
+        val match = amountPattern.matchEntire(line)
+        val amount = match?.groupValues?.get(1)?.toDoubleOrNull()
+        val suffix = match?.groupValues?.get(2)?.trim().orEmpty()
+        val normalizedSuffix = (if (match != null) suffix else line)
+            .lowercase()
+            .replace(Regex("[,;:]"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+            .split(" ")
+            .map { word ->
+                when {
+                    word.length > 3 && word.endsWith("ies") -> word.dropLast(3) + "y"
+                    word.length > 3 && word.endsWith("s") && !word.endsWith("ss") -> word.dropLast(1)
+                    else -> word
+                }
+            }.joinToString(" ")
+        // Only add amounts when the ingredient descriptions match. Unquantified duplicates
+        // are listed once; incompatible/free-text lines are kept rather than guessed.
+        val key = normalizedSuffix
+        val existing = entries[key]
+        if (existing == null) {
+            entries[key] = Entry(key, line, amount, suffix)
+        } else if (amount != null && existing.amount != null && match != null) {
+            existing.amount = existing.amount!! + amount
+            val total = existing.amount!!
+            val number = if (total % 1.0 == 0.0) total.toInt().toString()
+                else String.format(java.util.Locale.UK, "%.2f", total).trimEnd('0').trimEnd('.')
+            var mergedSuffix = existing.suffix
+            // Use a plural where a countable ingredient has a total greater than one.
+            val words = mergedSuffix.split(" ")
+            if (total > 1 && words.isNotEmpty()) {
+                val last = words.last()
+                if (last.length > 2 && !last.endsWith("s") && last !in setOf("oil", "rice", "fish", "milk", "flour", "cheese", "water", "sugar")) {
+                    mergedSuffix = (words.dropLast(1) + (last + "s")).joinToString(" ")
+                }
+            }
+            existing.display = "$number $mergedSuffix"
+        }
+    }
+    return entries.values.map { it.display }
 }
 
 private fun scaleIngredients(text: String, targetServings: Int, baseServings: Int): String =
