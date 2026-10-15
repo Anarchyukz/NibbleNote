@@ -1872,7 +1872,20 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                     // inside this Column can give it a height larger than the remaining viewport.
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     factory = { viewContext ->
-                        WebView(viewContext).apply {
+                        object : WebView(viewContext) {
+                            override fun onTouchEvent(event: android.view.MotionEvent): Boolean {
+                                // Ensure vertical swipes reach the WebView even when embedded in Compose.
+                                when (event.actionMasked) {
+                                    android.view.MotionEvent.ACTION_DOWN,
+                                    android.view.MotionEvent.ACTION_MOVE ->
+                                        parent?.requestDisallowInterceptTouchEvent(true)
+                                    android.view.MotionEvent.ACTION_UP,
+                                    android.view.MotionEvent.ACTION_CANCEL ->
+                                        parent?.requestDisallowInterceptTouchEvent(false)
+                                }
+                                return super.onTouchEvent(event)
+                            }
+                        }.apply {
                             isFocusable = true
                             isFocusableInTouchMode = true
                             settings.javaScriptEnabled = true
@@ -1884,17 +1897,6 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                             isNestedScrollingEnabled = true
                             isVerticalScrollBarEnabled = true
                             overScrollMode = android.view.View.OVER_SCROLL_IF_CONTENT_SCROLLS
-                            setOnTouchListener { view, event ->
-                                when (event.actionMasked) {
-                                    android.view.MotionEvent.ACTION_DOWN,
-                                    android.view.MotionEvent.ACTION_MOVE ->
-                                        view.parent?.requestDisallowInterceptTouchEvent(true)
-                                    android.view.MotionEvent.ACTION_UP,
-                                    android.view.MotionEvent.ACTION_CANCEL ->
-                                        view.parent?.requestDisallowInterceptTouchEvent(false)
-                                }
-                                false
-                            }
                             webViewClient = object : WebViewClient() {
                                 override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
                                     currentUrl = url ?: currentUrl
