@@ -59,7 +59,7 @@ E("Slow cooker chicken and sweet potato stew","700g chicken thighs; sweet potato
  )
  fun all(): List<Recipe> = e.mapIndexed { i, r ->
   Recipe(id="slowcooker-curated-${i+1}",title=r.title,
-   description="A distinct slow-cooker dish. PantryPal provides a concise adaptation; open the credited source for the publisher's full recipe and compare quantities and method.",
+   description="A distinct slow-cooker dish. NibbleNote provides a concise adaptation; open the credited source for the publisher's full recipe and compare quantities and method.",
    ingredients=r.ingredients.replace("; ", "\n"),instructions=r.steps,sourceUrl=r.source,
    prepTime=r.prep,cookTime=r.cook,servings="4")
  }
