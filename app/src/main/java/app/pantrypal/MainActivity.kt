@@ -34,6 +34,9 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
@@ -359,8 +362,25 @@ private class RecipeWebSearch {
                 }.distinctBy { it.first.url }
                     .sortedWith(compareBy<Triple<RecipeSearchResult, Int, Int>> { it.second }.thenBy { it.third })
                     .map { it.first }.take(12).toList()
-                if (parsed.isNotEmpty()) return@withContext parsed
-                lastError = IllegalStateException("Search provider responded, but its links could not be identified.")
+                if (parsed.isNotEmpty()) {
+                    // Keep only pages with Recipe structured data: these are the pages PantryPal can actually import.
+                    // Validate a small batch concurrently so search stays responsive.
+                    val checked = coroutineScope {
+                        parsed.take(8).mapIndexed { index, result ->
+                            async(Dispatchers.IO) {
+                                if (hasRecipeStructuredData(result.url)) index to result else null
+                            }
+                        }.awaitAll()
+                    }
+                    val recipePages = checked.filterNotNull().sortedBy { it.first }
+                        .map { it.second }.take(8)
+                    if (recipePages.isNotEmpty()) return@withContext recipePages
+                    lastError = IllegalStateException(
+                        "Search results were found, but they did not contain importable recipe cards. Try a more specific dish or ingredient."
+                    )
+                } else {
+                    lastError = IllegalStateException("Search provider responded, but its links could not be identified.")
+                }
             } catch (e: Exception) {
                 lastError = e
             } finally {
@@ -371,6 +391,56 @@ private class RecipeWebSearch {
             lastError?.message ?: "Online search failed. Try another search or import a recipe URL directly.",
             lastError
         )
+    }
+
+    private suspend fun hasRecipeStructuredData(pageUrl: String): Boolean = withContext(Dispatchers.IO) {
+        val connection = try {
+            (URL(pageUrl).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4500
+                readTimeout = 4500
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 Chrome/125.0 Mobile Safari/537.36")
+                setRequestProperty("Accept", "text/html,application/xhtml+xml")
+            }
+        } catch (_: Exception) { return@withContext false }
+
+        fun containsRecipe(value: Any?): Boolean = when (value) {
+            is JSONObject -> {
+                val type = value.opt("@type")?.toString().orEmpty()
+                type.contains("recipe", ignoreCase = true) ||
+                    (0 until value.length()).any { index ->
+                        containsRecipe(value.opt(value.names()?.optString(index).orEmpty()))
+                    }
+            }
+            is JSONArray -> (0 until value.length()).any { containsRecipe(value.opt(it)) }
+            else -> false
+        }
+
+        try {
+            if (connection.responseCode !in 200..299) return@withContext false
+            val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            val scripts = Regex("""(?is)<script\\b([^>]*)>(.*?)</script>""").findAll(html)
+            scripts.any { match ->
+                val attributes = match.groupValues[1]
+                val type = Regex("""(?is)\\btype\\s*=\\s*["']([^"']+)["']""")
+                    .find(attributes)?.groupValues?.get(1).orEmpty()
+                if (!type.equals("application/ld+json", ignoreCase = true)) {
+                    false
+                } else {
+                    val json = match.groupValues[2].trim()
+                    val value = try {
+                        JSONObject(json)
+                    } catch (_: Exception) {
+                        try { JSONArray(json) } catch (_: Exception) { null }
+                    }
+                    containsRecipe(value)
+                }
+            }
+        } catch (_: Exception) {
+            false
+        } finally {
+            connection.disconnect()
+        }
     }
 
     suspend fun fetchImage(pageUrl: String): String? = withContext(Dispatchers.IO) {
@@ -1108,7 +1178,7 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(site?.let { "Here are 10 recipe ideas from ${it.name}. Each time you open this site, PantryPal picks a different recipe search. Preview a recipe to read its ingredients and method; it is only saved when you tap Add to box." }
-                    ?: "Search the supported cooking websites for recipes, then preview a result before adding it to PantryPal.")
+                    ?: "Search for dishes or ingredients. PantryPal checks result pages for an importable recipe card, filtering out most general articles and guides. Preview a recipe before adding it to your box.")
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
