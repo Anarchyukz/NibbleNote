@@ -1414,128 +1414,153 @@ private fun ImportDialog(
         address.contains("tiktok.com", true) || sharedText.contains("tiktok.com", true) -> "TikTok"
         else -> null
     }
-    // Keep the dialog's scrollable content short enough that its action buttons remain
-    // visible on compact phones and in landscape. The action buttons sit outside this area.
-    val importDialogBodyMaxHeight =
-        (LocalConfiguration.current.screenHeightDp - 220).coerceAtLeast(160).coerceAtMost(540).dp
-    AlertDialog(
+    // Use a custom dialog rather than AlertDialog: on compact screens AlertDialog's
+    // built-in title/action padding can push its buttons below the visible screen.
+    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
+    val maxDialogHeight = (screenHeight - 48.dp).coerceAtLeast(240.dp)
+    Dialog(
         onDismissRequest = { if (!loading) onDismiss() },
-        title = { Text(if (socialSource != null) "Import from $socialSource" else "Import a recipe") },
-        text = {
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .heightIn(max = maxDialogHeight),
+            shape = MaterialTheme.shapes.extraLarge,
+            tonalElevation = 6.dp
+        ) {
             Column(
-                modifier = Modifier.heightIn(max = importDialogBodyMaxHeight).verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = maxDialogHeight)
+                    .padding(24.dp)
             ) {
                 Text(
-                    if (socialSource == "Facebook")
-                        "Facebook may block direct link imports. Share the post here, paste its caption, or choose a screenshot and read its text into a recipe draft."
-                    else if (socialSource != null)
-                        "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
-                    else if (sharedText.isNotBlank())
-                        "Shared from another app. NibbleNote will try the link first. If the page cannot be read, you can use the shared text to make a draft."
-                    else
-                        "Paste a recipe webpage URL. NibbleNote looks for structured recipe data on the page."
+                    text = if (socialSource != null) "Import from $socialSource" else "Import a recipe",
+                    style = MaterialTheme.typography.headlineSmall
                 )
-                OutlinedTextField(
-                    value = address,
-                    onValueChange = { address = it.trimStart(); error = null },
-                    label = { Text("Recipe or social post URL") },
-                    placeholder = { Text("https://…") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(
-                        onClick = { recipeImagePicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(if (selectedRecipeImage == null) "Choose screenshot" else "Change screenshot") }
-                    Button(
-                        enabled = selectedRecipeImage != null && !readingImage,
-                        onClick = {
-                            val imageUri = selectedRecipeImage ?: return@Button
-                            readingImage = true
-                            error = null
-                            scope.launch {
-                                try {
-                                    val input = InputImage.fromFilePath(context, imageUri)
-                                    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
-                                    try {
-                                        val recognized = recognizer.process(input).await().text.trim()
-                                        if (recognized.isBlank()) error = "No readable text found. Try a clearer screenshot."
-                                        else {
-                                            caption = listOf(caption.trim(), recognized).filter { it.isNotBlank() }.distinct().joinToString("\n\n")
-                                            error = "Text read from image. Check it below, then make a recipe draft."
-                                        }
-                                    } finally { recognizer.close() }
-                                } catch (e: Exception) {
-                                    error = "Couldn't read that image. Try another screenshot. " + (e.message ?: "")
-                                } finally { readingImage = false }
-                            }
-                        },
-                        modifier = Modifier.weight(1f)
-                    ) { Text(if (readingImage) "Reading…" else "Read image text") }
-                }
-                selectedRecipeImage?.let { imageUri ->
-                    AsyncImage(model = imageUri, contentDescription = "Recipe screenshot", contentScale = ContentScale.Fit,
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).clip(RoundedCornerShape(12.dp)))
-                }
-                if (sharedText.isNotBlank() || socialSource != null || selectedRecipeImage != null) {
-                    OutlinedTextField(
-                        value = caption,
-                        onValueChange = { caption = it; error = null },
-                        label = { Text("Post caption, ingredients or steps") },
-                        placeholder = { Text("Paste the caption or recipe text here…") },
-                        minLines = 3,
-                        maxLines = 6,
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                Spacer(Modifier.height(16.dp))
+                Column(
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .heightIn(max = (screenHeight - 190.dp).coerceAtLeast(80.dp))
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     Text(
-                        when (socialSource) {
-                            "Facebook" -> "Share the post to NibbleNote, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
-                            "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. NibbleNote cannot reliably read text baked into a video."
-                            else -> "Paste recipe text or choose a screenshot and tap Read image text. Screenshot text is recognised on your device."
-                        },
-                        style = MaterialTheme.typography.bodySmall
+                        if (socialSource == "Facebook")
+                            "Facebook may block direct link imports. Share the post here, paste its caption, or choose a screenshot and read its text into a recipe draft."
+                        else if (socialSource != null)
+                            "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
+                        else if (sharedText.isNotBlank())
+                            "Shared from another app. NibbleNote will try the link first. If the page cannot be read, you can use the shared text to make a draft."
+                        else
+                            "Paste a recipe webpage URL. NibbleNote looks for structured recipe data on the page."
                     )
-                    OutlinedButton(
-                        enabled = caption.isNotBlank(),
-                        onClick = {
-                            val cleaned = caption.trim()
-                            val source = address.ifBlank {
-                                Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
-                            }
-                            onImport(buildSocialRecipeDraft(cleaned, source))
-                        },
+                    OutlinedTextField(
+                        value = address,
+                        onValueChange = { address = it.trimStart(); error = null },
+                        label = { Text("Recipe or social post URL") },
+                        placeholder = { Text("https://…") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Make draft from caption / text") }
-                }
-                if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
-                error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            }
-        },
-        confirmButton = {
-            Button(enabled = !loading && address.isNotBlank(), onClick = {
-                loading = true
-                error = null
-                scope.launch {
-                    try {
-                        onImport(RecipeImporter().import(address))
-                    } catch (e: Exception) {
-                        error = (e.message ?: "Automatic import failed.") +
-                            if (socialSource != null) " Paste the caption or recipe text above to create a draft instead." else " Try manual entry."
-                    } finally {
-                        loading = false
+                    )
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(
+                            onClick = { recipeImagePicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (selectedRecipeImage == null) "Choose screenshot" else "Change screenshot") }
+                        Button(
+                            enabled = selectedRecipeImage != null && !readingImage,
+                            onClick = {
+                                val imageUri = selectedRecipeImage ?: return@Button
+                                readingImage = true
+                                error = null
+                                scope.launch {
+                                    try {
+                                        val input = InputImage.fromFilePath(context, imageUri)
+                                        val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                                        try {
+                                            val recognized = recognizer.process(input).await().text.trim()
+                                            if (recognized.isBlank()) error = "No readable text found. Try a clearer screenshot."
+                                            else {
+                                                caption = listOf(caption.trim(), recognized).filter { it.isNotBlank() }.distinct().joinToString("\n\n")
+                                                error = "Text read from image. Check it below, then make a recipe draft."
+                                            }
+                                        } finally { recognizer.close() }
+                                    } catch (e: Exception) {
+                                        error = "Couldn't read that image. Try another screenshot. " + (e.message ?: "")
+                                    } finally { readingImage = false }
+                                }
+                            },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (readingImage) "Reading…" else "Read image text") }
                     }
+                    selectedRecipeImage?.let { imageUri ->
+                        AsyncImage(model = imageUri, contentDescription = "Recipe screenshot", contentScale = ContentScale.Fit,
+                            modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).clip(RoundedCornerShape(12.dp)))
+                    }
+                    if (sharedText.isNotBlank() || socialSource != null || selectedRecipeImage != null) {
+                        OutlinedTextField(
+                            value = caption,
+                            onValueChange = { caption = it; error = null },
+                            label = { Text("Post caption, ingredients or steps") },
+                            placeholder = { Text("Paste the caption or recipe text here…") },
+                            minLines = 3,
+                            maxLines = 6,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Text(
+                            when (socialSource) {
+                                "Facebook" -> "Share the post to NibbleNote, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
+                                "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. NibbleNote cannot reliably read text baked into a video."
+                                else -> "Paste recipe text or choose a screenshot and tap Read image text. Screenshot text is recognised on your device."
+                            },
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        OutlinedButton(
+                            enabled = caption.isNotBlank(),
+                            onClick = {
+                                val cleaned = caption.trim()
+                                val source = address.ifBlank {
+                                    Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+                                }
+                                onImport(buildSocialRecipeDraft(cleaned, source))
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Make draft from caption / text") }
+                    }
+                    if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
+                    error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
-            }) { Text(if (loading) "Importing…" else "Try link import") }
-        },
-        dismissButton = {
-            Row {
-                TextButton(onClick = onManual) { Text("Enter manually") }
-                TextButton(enabled = !loading, onClick = onDismiss) { Text("Cancel") }
+                Spacer(Modifier.height(16.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    TextButton(onClick = onManual) { Text("Enter manually") }
+                    TextButton(enabled = !loading, onClick = onDismiss) { Text("Cancel") }
+                    Spacer(Modifier.width(4.dp))
+                    Button(enabled = !loading && address.isNotBlank(), onClick = {
+                        loading = true
+                        error = null
+                        scope.launch {
+                            try {
+                                onImport(RecipeImporter().import(address))
+                            } catch (e: Exception) {
+                                error = (e.message ?: "Automatic import failed.") +
+                                    if (socialSource != null) " Paste the caption or recipe text above to create a draft instead." else " Try manual entry."
+                            } finally {
+                                loading = false
+                            }
+                        }
+                    }) { Text(if (loading) "Importing…" else "Try link import") }
+                }
             }
         }
-    )
+    }
 }
 
 @Composable
