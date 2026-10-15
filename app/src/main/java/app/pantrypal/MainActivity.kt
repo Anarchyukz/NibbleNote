@@ -10,6 +10,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
@@ -1215,6 +1216,13 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
     var importingUrl by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var selectedFilter by remember(site?.domain) { mutableStateOf("All") }
+    var selectedFoodPhoto by remember { mutableStateOf<Uri?>(null) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        selectedFoodPhoto = uri
+        if (uri != null && query.isBlank()) {
+            error = "Photo selected. Add a dish name or ingredients below to search for matching recipes."
+        }
+    }
     val scope = rememberCoroutineScope()
 
     fun loadResults(term: String, shuffle: Boolean, filter: String = selectedFilter) {
@@ -1269,10 +1277,26 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
                             Text("Find something delicious", fontWeight = FontWeight.ExtraBold, color = PantryInk)
                             Text(
                                 site?.let { "Search ${it.name} or try a different dish. Preview results before saving." }
-                                    ?: "Search dishes and ingredients. PantryPal ranks likely recipe pages first and filters obvious articles.",
+                                    ?: "Choose a food photo for reference, then search by the dish or ingredients to find recipe pages. No AI service or photo upload is used.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = PantryInk.copy(alpha = 0.78f)
                             )
+                        }
+                    }
+                }
+                OutlinedButton(
+                    onClick = { photoPicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    modifier = Modifier.fillMaxWidth()
+                ) { Text(if (selectedFoodPhoto == null) "📷 Choose a food photo" else "📷 Change food photo") }
+                selectedFoodPhoto?.let { photo ->
+                    Card(shape = RoundedCornerShape(12.dp), colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color(0xFFFFFBF2))) {
+                        Row(Modifier.fillMaxWidth().padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            AsyncImage(model = photo, contentDescription = "Selected food photo", contentScale = ContentScale.Crop, modifier = Modifier.size(88.dp).clip(RoundedCornerShape(10.dp)))
+                            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text("Photo selected", fontWeight = FontWeight.Bold, color = PantryInk)
+                                Text("Use it as a reference, then type the dish or ingredients below. This version keeps the photo on your device and does not use AI image recognition.", style = MaterialTheme.typography.bodySmall, color = PantryInk.copy(alpha = 0.8f))
+                                TextButton(onClick = { selectedFoodPhoto = null }) { Text("Remove photo") }
+                            }
                         }
                     }
                 }
