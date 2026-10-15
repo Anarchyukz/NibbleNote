@@ -1,22 +1,23 @@
-# PantryPal
+# NibbleNote
 
-**Your recipes, your kitchen.** PantryPal is a free, open-source Android recipe organiser built with Kotlin and Jetpack Compose. The MVP stores recipes locally and imports from websites that publish Schema.org `Recipe` JSON-LD data.
+**Your recipes, neatly kept.** NibbleNote is a free, open-source Android recipe organiser built with Kotlin and Jetpack Compose. The MVP stores recipes locally and imports from websites that publish Schema.org `Recipe` JSON-LD data.
 
 ## Features
 - Add, edit, search and delete recipes.
 - Local device storage; no account or server required.
 - Import recipe name, description, ingredients and instructions from supported recipe pages.
 - Nutrition details, recipe website browsing and themed discovery.
+- Slow-cooker recipe collection.
 - GitHub Actions builds an installable APK when code is updated.
 - Versioned APK releases can be published from a `v*` tag.
 
 ## Download and install
 
-**[Download PantryPal for Android (APK)](https://github.com/Anarchyukz/PantryPal/releases/latest/download/app-debug.apk)** — this direct link downloads the APK attached to the latest published GitHub Release.
+**[Download NibbleNote for Android (APK)](https://github.com/Anarchyukz/PantryPal/releases/latest/download/app-debug.apk)** — this direct link downloads the APK attached to the latest published GitHub Release.
 
-For the newest development build before it has been published as a release, open the [latest successful GitHub Actions build](https://github.com/Anarchyukz/PantryPal/actions), select the successful run, and download `PantryPal-APK` from **Artifacts**. Extract the ZIP and install the APK on your Android device.
+For the newest development build before it has been published as a release, open the [latest successful GitHub Actions build](https://github.com/Anarchyukz/PantryPal/actions), select the successful run, and download `NibbleNote-APK` from **Artifacts**. Extract the ZIP and install the APK on your Android device.
 
-The automated build uses Android's debug signing key unless release-signing secrets are configured in GitHub. For a stable signing identity across future updates, configure `PANTRYPAL_KEYSTORE_BASE64`, `PANTRYPAL_KEYSTORE_PASSWORD`, `PANTRYPAL_KEY_ALIAS` and `PANTRYPAL_KEY_PASSWORD` as repository Actions secrets before distributing signed release builds. Never commit signing keys or passwords.
+The automated build uses Android's debug signing key unless release-signing secrets are configured in GitHub. For a stable signing identity across future updates, configure `PANTRYPAL_KEYSTORE_BASE64`, `PANTRYPAL_KEYSTORE_PASSWORD`, `PANTRYPAL_KEY_ALIAS` and `PANTRYPAL_KEY_PASSWORD` as repository Actions secrets before distributing signed release builds. These existing secret names are retained to avoid breaking your build setup. Never commit signing keys or passwords.
 
 ## Build from source
 Requirements: JDK 17, Android SDK 36, Gradle 8.13.
@@ -27,10 +28,10 @@ gradle assembleDebug
 
 APK output: `app/build/outputs/apk/debug/app-debug.apk`.
 
-To publish a versioned APK, push a tag beginning with `v` (for example, `v1.0.0`). Configure release signing first if you need an APK that can be updated in place across future builds.
+To publish a versioned APK, push a tag beginning with `v` (for example, `v1.1.0`). Configure release signing first if you need an APK that can be updated in place across future builds.
 
 ## Donations
-PantryPal is free. Add voluntary donation links here when ready:
+NibbleNote is free. Add voluntary donation links here when ready:
 - GitHub Sponsors: setup pending
 - Ko-fi: setup pending
 
