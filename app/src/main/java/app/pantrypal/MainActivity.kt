@@ -7,6 +7,7 @@ import android.os.Bundle
 import android.widget.Toast
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.activity.result.contract.ActivityResultContracts
@@ -2062,6 +2063,55 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
 }
 
 @Composable
+private val adBlockHostPatterns = listOf(
+    "doubleclick.net", "googlesyndication.com", "googleadservices.com",
+    "adservice.google.com", "pagead2.googlesyndication.com",
+    "adnxs.com", "adform.net", "taboola.com", "outbrain.com",
+    "amazon-adsystem.com", "criteo.com", "quantserve.com",
+    "scorecardresearch.com", "ads-twitter.com", "connect.facebook.net"
+)
+
+private fun shouldBlockAdRequest(rawUrl: String): Boolean {
+    val host = try { Uri.parse(rawUrl).host?.lowercase().orEmpty() } catch (_: Exception) { "" }
+    if (host.isBlank()) return false
+    return adBlockHostPatterns.any { host == it || host.endsWith(".$it") }
+}
+
+private val cookiePopupHelperScript = """
+(function() {
+  if (window.__nibbleNoteCookieHelper) return;
+  window.__nibbleNoteCookieHelper = true;
+  var started = Date.now();
+  var timer = setInterval(function() {
+    try {
+      var buttons = Array.from(document.querySelectorAll('button, [role="button"], input[type="button"], input[type="submit"]'));
+      var reject = buttons.find(function(el) {
+        var t = ((el.innerText || el.value || el.getAttribute('aria-label') || '') + '').trim().toLowerCase();
+        return /^(reject all|deny all|decline all|reject optional|decline optional|only necessary|necessary cookies only|essential only|do not sell or share)$/.test(t);
+      });
+      if (reject) {
+        reject.click();
+        clearInterval(timer);
+        return;
+      }
+      // If no reject choice exists, only close a clearly-labelled dismiss/close control;
+      // never click an "Accept" button or grant consent automatically.
+      var close = buttons.find(function(el) {
+        var t = ((el.innerText || el.value || el.getAttribute('aria-label') || '') + '').trim().toLowerCase();
+        var aria = (el.getAttribute('aria-label') || '').toLowerCase();
+        return (t === '×' || t === 'x' || t === 'close' || aria === 'close' || aria === 'close dialog') &&
+          !!el.closest('[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [role="dialog"]');
+      });
+      if (close) {
+        close.click();
+        clearInterval(timer);
+      }
+    } catch (e) {}
+    if (Date.now() - started > 10000) clearInterval(timer);
+  }, 700);
+})();
+""".trimIndent()
+
 private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -2196,7 +2246,26 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                                     currentUrl = url ?: currentUrl
                                     pageTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentUrl
                                     canGoBack = view?.canGoBack() == true
+                                    // Try privacy-preserving cookie choices (reject/essential only),
+                                    // never auto-accept tracking consent.
+                                    view?.evaluateJavascript(cookiePopupHelperScript, null)
+                                }
 
+                                override fun shouldInterceptRequest(
+                                    view: WebView?,
+                                    request: WebResourceRequest
+                                ): WebResourceResponse? {
+                                    if (shouldBlockAdRequest(request.url.toString())) {
+                                        return WebResourceResponse(
+                                            "text/plain",
+                                            "utf-8",
+                                            204,
+                                            "No Content",
+                                            emptyMap(),
+                                            ByteArrayInputStream(ByteArray(0))
+                                        )
+                                    }
+                                    return super.shouldInterceptRequest(view, request)
                                 }
 
 
