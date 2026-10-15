@@ -387,7 +387,23 @@ private class RecipeWebSearch {
                             "calorie calculator", "nutrition calculator", "weekly menu"
                         )
                         if (articleSignals.any { it in title }) return -100
-                        val knownSite = recipeSites.any { host == it || host.endsWith(".$it") || url.contains(it) }
+                        // Search engines sometimes return grocery products for ingredient queries
+                        // (for example, tins of branded broth) even when we append "recipe".
+                        val productTitleSignals = listOf(
+                            "buy ", "price ", "tin of ", "tins of ", "can of ", "cans of ",
+                            "pack of ", "multipack", "multi pack", "grocery product",
+                            "product details", "add to basket", "add to cart", "heinz broth"
+                        )
+                        val productPathSignals = listOf(
+                            "/products/", "/product/", "/p/", "/shop/product",
+                            "/groceries/products/", "/catalogue/item/"
+                        )
+                        if (productTitleSignals.any { it in title } ||
+                            productPathSignals.any { it in url }) return -100
+                        // Match a known recipe publisher against the actual hostname only.
+                        // A supermarket's product URL must not score as a recipe just because
+                        // its domain is listed for its recipe section.
+                        val knownSite = recipeSites.any { host == it || host.endsWith(".$it") }
                         val recipePath = listOf("/recipe", "/recipes/", "/food/recipes", "/dish/", "/how-to-make/")
                             .any { it in url }
                         val recipeTitle = listOf("recipe", "how to make", "ingredients", "curry", "soup",
@@ -397,6 +413,11 @@ private class RecipeWebSearch {
                         val queryWords = query.lowercase().split(Regex("\\s+"))
                             .filter { it.length > 2 && it !in setOf("the", "and", "with", "recipe", "recipes") }
                         val queryMatches = queryWords.count { it in title }
+                        val recipeIntent = recipePath || "recipe" in title || "recipes" in title ||
+                            "how to make" in title || "ingredients" in title
+                        // Generic ingredient matches alone are not enough: keep pages that have
+                        // a recipe signal, or strong evidence from a known recipe publisher.
+                        if (!recipeIntent && !knownSite && queryMatches < 2) return -100
                         return (if (knownSite) 3 else 0) +
                             (if (recipePath) 4 else 0) +
                             (if ("recipe" in title || "recipes" in title) 4 else 0) +
