@@ -2062,7 +2062,6 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
     }
 }
 
-@Composable
 private val adBlockHostPatterns = listOf(
     "doubleclick.net", "googlesyndication.com", "googleadservices.com",
     "adservice.google.com", "pagead2.googlesyndication.com",
@@ -2112,6 +2111,7 @@ private val cookiePopupHelperScript = """
 })();
 """.trimIndent()
 
+@Composable
 private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImport: (Recipe) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
