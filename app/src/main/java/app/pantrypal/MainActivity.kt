@@ -1907,27 +1907,9 @@ private fun RecipeBrowserDialog(initialUrl: String, onDismiss: () -> Unit, onImp
                                     currentUrl = url ?: currentUrl
                                     pageTitle = view?.title?.takeIf { it.isNotBlank() } ?: currentUrl
                                     canGoBack = view?.canGoBack() == true
-                                    // Hide common ad containers, especially persistent bottom banners.
-                                    view?.evaluateJavascript(
-                                        """(function(){var s=document.createElement('style');s.textContent='ins.adsbygoogle,[id*=google_ads],[id*="sticky-ad"],[class*="sticky-ad"],[id*="bottom-ad"],[class*="bottom-ad"],[class*="ad-banner"],[data-testid*="ad-container"]{display:none!important;visibility:hidden!important;height:0!important;max-height:0!important;pointer-events:none!important}';document.documentElement.appendChild(s);})();""",
-                                        null
-                                    )
+
                                 }
 
-                                override fun shouldInterceptRequest(view: WebView?, request: WebResourceRequest?): android.webkit.WebResourceResponse? {
-                                    val host = request?.url?.host?.lowercase().orEmpty()
-                                    val adHosts = listOf(
-                                        "doubleclick.net", "googlesyndication.com", "googleadservices.com",
-                                        "adservice.google.com", "adnxs.com", "taboola.com", "outbrain.com",
-                                        "criteo.com", "amazon-adsystem.com", "ads-twitter.com"
-                                    )
-                                    if (adHosts.any { host == it || host.endsWith(".$it") }) {
-                                        return android.webkit.WebResourceResponse(
-                                            "text/plain", "utf-8", ByteArrayInputStream(ByteArray(0))
-                                        )
-                                    }
-                                    return super.shouldInterceptRequest(view, request)
-                                }
 
                                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                                     val target = request.url
