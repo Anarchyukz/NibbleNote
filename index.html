@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f97316">
+  <meta name="description" content="NibbleNote is a free Android recipe organiser. Save recipes, import from supported websites and keep your cooking ideas together.">
+  <title>NibbleNote — Your recipes, neatly kept</title>
+  <style>
+    :root{color-scheme:dark;--bg:#101114;--panel:#191b20;--text:#f7f7f8;--muted:#b7bbc4;--accent:#fb923c;--line:#30333a}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 50% -10%,#3b2418 0,transparent 48%),var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+    a{color:inherit} .wrap{width:min(1080px,calc(100% - 36px));margin:auto}
+    header{padding:24px 0;border-bottom:1px solid #ffffff12}.nav{display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{font-weight:850;font-size:1.3rem;letter-spacing:-.04em;text-decoration:none}.brand span{color:var(--accent)}.navlinks{display:flex;gap:18px;flex-wrap:wrap}.navlinks a{color:var(--muted);text-decoration:none;font-size:.92rem}
+    .hero{padding:82px 0 64px;text-align:center}.eyebrow{display:inline-block;padding:6px 12px;border:1px solid #fb923c55;border-radius:99px;color:#fdba74;font-size:.84rem;font-weight:700;background:#fb923c12}.hero h1{font-size:clamp(2.7rem,8vw,5.4rem);line-height:1.02;letter-spacing:-.065em;margin:22px auto 18px;max-width:850px}.hero h1 em{font-style:normal;color:var(--accent)}.hero p{max-width:650px;margin:0 auto;color:var(--muted);font-size:1.1rem}
+    .actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:30px 0 18px}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:12px 20px;border-radius:13px;text-decoration:none;font-weight:750;border:1px solid var(--line);background:var(--panel)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#211208}.small{font-size:.88rem;color:var(--muted)}
+    .features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:18px 0 70px}.feature{padding:24px;background:linear-gradient(145deg,#202228,#17181d);border:1px solid var(--line);border-radius:20px}.ico{font-size:1.7rem}.feature h2{font-size:1.08rem;margin:12px 0 6px}.feature p{color:var(--muted);margin:0;font-size:.95rem}
+    .about{padding:42px 0 70px;border-top:1px solid #ffffff12}.about h2{font-size:clamp(1.8rem,4vw,2.5rem);letter-spacing:-.04em;margin:0 0 12px}.about p{max-width:760px;color:var(--muted)}.note{padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:#ffffff05;color:var(--muted);font-size:.92rem}
+    footer{border-top:1px solid #ffffff12;padding:24px 0 34px;color:var(--muted);font-size:.9rem}.foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+    @media(max-width:700px){.hero{padding:58px 0 42px}.features{grid-template-columns:1fr;padding-bottom:45px}.nav{align-items:flex-start;flex-direction:column}.navlinks{gap:14px}.feature{padding:20px}}
+  </style>
+</head>
+<body>
+<header><div class="wrap nav">
+  <a class="brand" href="#" aria-label="NibbleNote home">Nibble<span>Note</span></a>
+  <nav class="navlinks" aria-label="Main navigation"><a href="#features">Features</a><a href="#about">About</a><a href="https://github.com/Anarchyukz/NibbleNote">Source code</a></nav>
+</div></header>
+<main>
+  <section class="hero wrap">
+    <span class="eyebrow">Free · Open source · Android</span>
+    <h1>Your recipes,<br><em>neatly kept.</em></h1>
+    <p>Keep your favourite meals in one place. Save recipes, import ingredients and instructions from supported websites, and browse ideas for your next meal — without needing an account.</p>
+    <div class="actions">
+      <a class="btn primary" href="https://github.com/Anarchyukz/NibbleNote/releases">Get NibbleNote</a>
+      <a class="btn" href="https://github.com/Anarchyukz/NibbleNote">Explore the project</a>
+    </div>
+    <div class="small">Free to use. Donations are optional and never required to unlock features.</div>
+  </section>
+  <section class="wrap features" id="features">
+    <article class="feature"><div class="ico" aria-hidden="true">📚</div><h2>Your own recipe collection</h2><p>Add, edit, search and organise recipes on your device. Your collection stays local to your phone.</p></article>
+    <article class="feature"><div class="ico" aria-hidden="true">🍅</div><h2>Import from websites</h2><p>Bring in recipe details from supported pages, including ingredients and cooking instructions. Website compatibility varies.</p></article>
+    <article class="feature"><div class="ico" aria-hidden="true">🥘</div><h2>Slow-cooker inspiration</h2><p>Browse a collection of slow-cooker ideas with ingredient quantities and practical cooking steps.</p></article>
+  </section>
+  <section class="about"><div class="wrap" id="about">
+    <h2>Simple, useful, and yours.</h2>
+    <p>NibbleNote is an open-source Android recipe organiser built with Kotlin and Jetpack Compose. It is designed to keep everyday cooking ideas easy to find, with local-first storage and no account to create.</p>
+    <div class="note">Recipe imports depend on what a website makes available and whether it allows automated access. Check imported quantities and instructions before cooking, especially where allergies or food safety are involved.</div>
+  </div></section>
+</main>
+<footer><div class="wrap foot"><span>© NibbleNote · Free and open source</span><span><a href="https://github.com/Anarchyukz/NibbleNote">GitHub repository</a> · MIT licence</span></div></footer>
+</body>
+</html>
