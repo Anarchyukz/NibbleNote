@@ -28,6 +28,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.text.font.FontWeight
@@ -1413,12 +1414,16 @@ private fun ImportDialog(
         address.contains("tiktok.com", true) || sharedText.contains("tiktok.com", true) -> "TikTok"
         else -> null
     }
+    // Keep the dialog's scrollable content short enough that its action buttons remain
+    // visible on compact phones and in landscape. The action buttons sit outside this area.
+    val importDialogBodyMaxHeight =
+        (LocalConfiguration.current.screenHeightDp - 220).coerceAtLeast(160).coerceAtMost(540).dp
     AlertDialog(
         onDismissRequest = { if (!loading) onDismiss() },
         title = { Text(if (socialSource != null) "Import from $socialSource" else "Import a recipe") },
         text = {
             Column(
-                modifier = Modifier.heightIn(max = 540.dp).verticalScroll(rememberScrollState()),
+                modifier = Modifier.heightIn(max = importDialogBodyMaxHeight).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
