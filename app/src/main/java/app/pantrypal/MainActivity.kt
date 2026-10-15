@@ -309,10 +309,6 @@ private class RecipeWebSearch {
      * These photos are deliberately not cached into the local recipe data.
      */
     suspend fun fetchRecipeCardImage(recipe: Recipe): String? = withContext(Dispatchers.IO) {
-        if (!recipe.id.startsWith("slowcooker-curated-") && recipe.sourceUrl.isNotBlank()) {
-            return@withContext fetchImage(recipe.sourceUrl)
-        }
-
         val baseTitle = recipe.title
             .removePrefix("Slow cooker ")
             .removePrefix("Slow-cooker ")
@@ -320,8 +316,45 @@ private class RecipeWebSearch {
             .trim()
         if (baseTitle.isBlank()) return@withContext null
 
+        // Prefer an actual matching dish photo from Wikimedia Commons (openly licensed media).
         try {
-            val encoded = URLEncoder.encode(baseTitle, "UTF-8")
+            val query = URLEncoder.encode("$baseTitle food recipe", "UTF-8")
+            val endpoint = "https://commons.wikimedia.org/w/api.php?action=query&generator=search&gsrsearch=filetype%3Abitmap%20$query&gsrnamespace=6&gsrlimit=8&prop=imageinfo&iiprop=url&iiurlwidth=640&format=json"
+            val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                connectTimeout = 6500
+                readTimeout = 6500
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "PantryPal/1.0 (Android recipe app)")
+            }
+            try {
+                if (connection.responseCode in 200..299) {
+                    val json = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                    val pages = json.optJSONObject("query")?.optJSONObject("pages")
+                    if (pages != null) {
+                        val keys = pages.keys()
+                        while (keys.hasNext()) {
+                            val page = pages.optJSONObject(keys.next()) ?: continue
+                            val info = page.optJSONArray("imageinfo")?.optJSONObject(0) ?: continue
+                            val candidate = info.optString("thumburl").ifBlank { info.optString("url") }
+                            if (candidate.startsWith("https://")) return@withContext candidate
+                        }
+                    }
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (_: Exception) {
+            // Continue to the fallback providers.
+        }
+
+        // TheMealDB provides food photography for many internationally known dishes.
+        try {
+            val simplified = baseTitle
+                .replace(Regex("(?i)^slow cooker "), "")
+                .replace(Regex("(?i)^slow-cooker "), "")
+                .replace(Regex("(?i)\\b(slow cooker|slow-cooker|with|and)\\b"), " ")
+                .trim()
+            val encoded = URLEncoder.encode(simplified, "UTF-8")
             val connection = (URL("https://www.themealdb.com/api/json/v1/1/search.php?s=$encoded")
                 .openConnection() as HttpURLConnection).apply {
                 connectTimeout = 4500
@@ -333,23 +366,28 @@ private class RecipeWebSearch {
                 if (connection.responseCode in 200..299) {
                     val json = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
                     val meals = json.optJSONArray("meals")
-                    val image = meals?.optJSONObject(0)?.optString("strMealThumb")?.takeIf {
-                        it.startsWith("https://") || it.startsWith("http://")
-                    }
-                    if (!image.isNullOrBlank()) return@withContext image
+                    val image = meals?.optJSONObject(0)?.optString("strMealThumb")
+                    if (!image.isNullOrBlank() && image.startsWith("https://")) return@withContext image
                 }
             } finally {
                 connection.disconnect()
             }
-        } catch (_: Exception) {
-            // Continue to the keyword-photo fallback below.
-        }
+        } catch (_: Exception) { }
 
-        val keywords = baseTitle.lowercase()
-            .replace(Regex("[^a-z0-9 ]"), " ")
-            .trim()
-            .replace(Regex("\\s+"), ",")
-        if (keywords.isBlank()) null else "https://loremflickr.com/640/480/food,$keywords"
+        // Always provide a real food photograph if exact-title lookup has no match.
+        val t = baseTitle.lowercase()
+        when {
+            listOf("pudding", "compote", "dessert", "chocolate").any { it in t } ->
+                "https://images.unsplash.com/photo-1578985545062-69928b1d9587?auto=format&fit=crop&w=640&q=75"
+            listOf("curry", "tikka", "korma", "tagine", "chilli").any { it in t } ->
+                "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?auto=format&fit=crop&w=640&q=75"
+            listOf("soup", "stew", "casserole", "hotpot", "lentil").any { it in t } ->
+                "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=640&q=75"
+            listOf("salad", "vegetable", "ratatouille", "bean").any { it in t } ->
+                "https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=640&q=75"
+            else ->
+                "https://images.unsplash.com/photo-1547592180-85f173990554?auto=format&fit=crop&w=640&q=75"
+        }
     }
 
     suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
