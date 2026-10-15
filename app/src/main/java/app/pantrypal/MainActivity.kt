@@ -1414,37 +1414,33 @@ private fun ImportDialog(
         address.contains("tiktok.com", true) || sharedText.contains("tiktok.com", true) -> "TikTok"
         else -> null
     }
-    // Use a custom dialog rather than AlertDialog: on compact screens AlertDialog's
-    // built-in title/action padding can push its buttons below the visible screen.
-    val screenHeight = LocalConfiguration.current.screenHeightDp.dp
-    val maxDialogHeight = (screenHeight - 48.dp).coerceAtLeast(240.dp)
+    // Use a full-screen dialog with a fixed action bar. A height-limited wrap-content
+    // dialog can still be measured taller than the visible viewport on some Android devices.
     Dialog(
         onDismissRequest = { if (!loading) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .heightIn(max = maxDialogHeight),
+                .fillMaxSize()
+                .padding(12.dp),
             shape = MaterialTheme.shapes.extraLarge,
             tonalElevation = 6.dp
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = maxDialogHeight)
-                    .padding(24.dp)
+                    .fillMaxSize()
+                    .padding(20.dp)
             ) {
                 Text(
                     text = if (socialSource != null) "Import from $socialSource" else "Import a recipe",
                     style = MaterialTheme.typography.headlineSmall
                 )
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Column(
                     modifier = Modifier
-                        .weight(1f, fill = false)
-                        .heightIn(max = (screenHeight - 190.dp).coerceAtLeast(80.dp))
+                        .weight(1f)
+                        .fillMaxWidth()
                         .verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
@@ -1452,7 +1448,7 @@ private fun ImportDialog(
                         if (socialSource == "Facebook")
                             "Facebook may block direct link imports. Share the post here, paste its caption, or choose a screenshot and read its text into a recipe draft."
                         else if (socialSource != null)
-                            "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
+                            "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a draft."
                         else if (sharedText.isNotBlank())
                             "Shared from another app. NibbleNote will try the link first. If the page cannot be read, you can use the shared text to make a draft."
                         else
@@ -1534,7 +1530,7 @@ private fun ImportDialog(
                     if (loading) LinearProgressIndicator(Modifier.fillMaxWidth())
                     error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
-                Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(12.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.End,
