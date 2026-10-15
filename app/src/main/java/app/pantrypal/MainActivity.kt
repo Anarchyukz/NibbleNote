@@ -646,6 +646,15 @@ private fun PantryPalApp(
     var browseFilter by remember { mutableStateOf("") }
     var browsingUrl by remember { mutableStateOf<String?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
+    var slowCookerSearch by remember { mutableStateOf("") }
+    val slowCookerRecipes = remember { SlowCookerRecipes.all() }
+    val visibleSlowCookerRecipes = remember(slowCookerSearch, slowCookerRecipes) {
+        slowCookerRecipes.filter {
+            slowCookerSearch.isBlank() ||
+                it.title.contains(slowCookerSearch, true) ||
+                it.ingredients.contains(slowCookerSearch, true)
+        }
+    }
     var selected by remember { mutableStateOf<Recipe?>(null) }
     val context = LocalContext.current
 
@@ -708,7 +717,7 @@ private fun PantryPalApp(
                 ).padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                listOf("My recipes", "Browse sites").forEach { section ->
+                listOf("My recipes", "Slow cooker", "Browse sites").forEach { section ->
                     val active = homeSection == section
                     Button(
                         onClick = { homeSection = section },
@@ -721,8 +730,16 @@ private fun PantryPalApp(
                         elevation = ButtonDefaults.buttonElevation(defaultElevation = if (active) 1.dp else 0.dp),
                         contentPadding = PaddingValues(vertical = 10.dp)
                     ) {
-                        Text(if (section == "My recipes") "My recipes (${recipes.size})" else "Browse sites",
-                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium)
+                        Text(
+                            when (section) {
+                                "My recipes" -> "My recipes (${recipes.size})"
+                                "Slow cooker" -> "Slow cooker (200)"
+                                else -> "Browse sites"
+                            },
+                            fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1
+                        )
                     }
                 }
             }
@@ -824,6 +841,40 @@ private fun PantryPalApp(
                         }
                     } else {
                         items(visible, key = { it.id }) { recipe ->
+                            SavedRecipeCard(recipe = recipe, onClick = { selected = recipe })
+                        }
+                    }
+                } else if (homeSection == "Slow cooker") {
+                    item {
+                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)) {
+                            Text("200 RECIPES INCLUDED OFFLINE", style = MaterialTheme.typography.labelMedium,
+                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
+                            Text("Slow cooker favourites", style = MaterialTheme.typography.titleLarge,
+                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
+                            Text("Everyday UK-style dinners, casseroles, curries, soups and puddings. Open any recipe, then tap Add to box to keep it with your own recipes.",
+                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                        }
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = slowCookerSearch,
+                            onValueChange = { slowCookerSearch = it },
+                            placeholder = { Text("Search 200 slow cooker recipes") },
+                            leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(15.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PantryOrange,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                            )
+                        )
+                    }
+                    if (visibleSlowCookerRecipes.isEmpty()) {
+                        item { Text("No slow cooker recipes match that search.", color = androidx.compose.ui.graphics.Color(0xFF6B7280)) }
+                    } else {
+                        items(visibleSlowCookerRecipes, key = { it.id }) { recipe ->
                             SavedRecipeCard(recipe = recipe, onClick = { selected = recipe })
                         }
                     }
