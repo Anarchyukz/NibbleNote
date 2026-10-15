@@ -372,26 +372,44 @@ private class RecipeWebSearch {
                         "budgetbytes.com", "loveandlemons.com", "cookieandkate.com", "seriouseats.com",
                         "sallysbakingaddiction.com", "waitrose.com", "tesco.com"
                     )
-                    fun likelyRecipe(result: RecipeSearchResult): Boolean {
+                    fun recipeScore(result: RecipeSearchResult): Int {
                         val url = result.url.lowercase()
                         val title = result.title.lowercase()
                         val host = try { URL(url).host.removePrefix("www.") } catch (_: Exception) { "" }
                         val blockedHosts = listOf("youtube.com", "youtu.be", "facebook.com", "instagram.com",
                             "pinterest.com", "tiktok.com", "reddit.com")
-                        if (blockedHosts.any { host == it || host.endsWith(".$it") }) return false
-                        if (listOf("news", "newsletter", "podcast", "restaurant review", "product review",
-                                "best restaurants", "meal kit", "kitchen equipment").any { it in title }) return false
+                        if (blockedHosts.any { host == it || host.endsWith(".$it") }) return -100
+                        val articleSignals = listOf(
+                            "news", "newsletter", "podcast", "restaurant review", "product review",
+                            "best restaurants", "meal kit", "kitchen equipment", "cookware review",
+                            "food industry", "food trends", "what is", "history of", "explained",
+                            "calorie calculator", "nutrition calculator", "weekly menu"
+                        )
+                        if (articleSignals.any { it in title }) return -100
                         val knownSite = recipeSites.any { host == it || host.endsWith(".$it") || url.contains(it) }
-                        val recipePath = listOf("/recipe", "/recipes/", "/food/recipes", "/dish/")
+                        val recipePath = listOf("/recipe", "/recipes/", "/food/recipes", "/dish/", "/how-to-make/")
                             .any { it in url }
                         val recipeTitle = listOf("recipe", "how to make", "ingredients", "curry", "soup",
-                            "pasta", "chicken", "cake", "bread", "salad", "stew", "cookies", "brownies")
+                            "pasta", "chicken", "cake", "bread", "salad", "stew", "cookies", "brownies",
+                            "roast", "casserole", "bake", "noodles", "pizza", "rice", "pudding")
                             .any { it in title }
-                        return knownSite || recipePath || recipeTitle
+                        val queryWords = query.lowercase().split(Regex("\\s+"))
+                            .filter { it.length > 2 && it !in setOf("the", "and", "with", "recipe", "recipes") }
+                        val queryMatches = queryWords.count { it in title }
+                        return (if (knownSite) 3 else 0) +
+                            (if (recipePath) 4 else 0) +
+                            (if ("recipe" in title || "recipes" in title) 4 else 0) +
+                            (if ("how to make" in title || "ingredients" in title) 2 else 0) +
+                            (if (recipeTitle) 2 else 0) + queryMatches
                     }
-                    val ranked = parsed.filter(::likelyRecipe)
-                    val candidates = (ranked + parsed.filterNot(ranked::contains))
-                        .distinctBy { it.url }.take(12)
+                    // Rank recipe pages ahead of generic articles, while retaining unverified
+                    // results from unfamiliar sites when the title and URL look relevant.
+                    val candidates = parsed.map { it to recipeScore(it) }
+                        .filter { it.second > -100 }
+                        .sortedByDescending { it.second }
+                        .map { it.first }
+                        .distinctBy { it.url }
+                        .take(12)
                     val checked = coroutineScope {
                         candidates.take(8).mapIndexed { index, result ->
                             async(Dispatchers.IO) {
@@ -596,6 +614,7 @@ private fun PantryPalApp(
     var showRecipeSearch by remember { mutableStateOf(false) }
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
     var browseThemeQuery by remember { mutableStateOf("") }
+    var browseFilter by remember { mutableStateOf("") }
     var browsingUrl by remember { mutableStateOf<String?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
     var selected by remember { mutableStateOf<Recipe?>(null) }
@@ -790,7 +809,29 @@ private fun PantryPalApp(
                                 style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                         }
                     }
-                    items(browseCategories, key = { it.title }) { category ->
+                    OutlinedTextField(
+                        value = browseFilter,
+                        onValueChange = { browseFilter = it },
+                        placeholder = { Text("Find a cuisine, category or website") },
+                        leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
+                        singleLine = true,
+                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PantryOrange,
+                            unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                            focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                        )
+                    )
+                    items(
+                        browseCategories.filter { category ->
+                            browseFilter.isBlank() ||
+                                category.title.contains(browseFilter, ignoreCase = true) ||
+                                category.subtitle.contains(browseFilter, ignoreCase = true) ||
+                                browseSites.any { it.category == category.title && it.name.contains(browseFilter, ignoreCase = true) }
+                        },
+                        key = { it.title }
+                    ) { category ->
                         Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Text(category.emoji, style = MaterialTheme.typography.headlineMedium)
@@ -1173,16 +1214,25 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
     var searching by remember { mutableStateOf(false) }
     var importingUrl by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var selectedFilter by remember(site?.domain) { mutableStateOf("All") }
     val scope = rememberCoroutineScope()
 
-    fun loadResults(term: String, shuffle: Boolean) {
+    fun loadResults(term: String, shuffle: Boolean, filter: String = selectedFilter) {
         if (term.isBlank() || searching || importingUrl != null) return
         searching = true
         error = null
         results = emptyList()
         scope.launch {
             try {
-                val found = RecipeWebSearch().search(term, site?.domain)
+                val filterWords = when (filter) {
+                    "Quick" -> "quick easy 30 minute"
+                    "Budget" -> "budget cheap affordable"
+                    "High protein" -> "high protein"
+                    "Vegetarian" -> "vegetarian meat free"
+                    else -> ""
+                }
+                val searchTerm = listOf(term.trim(), filterWords).filter { it.isNotBlank() }.joinToString(" ")
+                val found = RecipeWebSearch().search(searchTerm, site?.domain)
                 results = if (shuffle) found.shuffled().take(10) else found
                 if (results.isEmpty()) error = "No recipes found on " + (site?.name ?: "the supported recipe sites") + ". Try another search."
             } catch (e: Exception) {
@@ -1205,16 +1255,62 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
                 Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                Text(site?.let { "Here are 10 recipe ideas from ${it.name}. Each time you open this site, PantryPal picks a different recipe search. Preview a recipe to read its ingredients and method; it is only saved when you tap Add to box." }
-                    ?: "Search for dishes or ingredients. PantryPal checks result pages for an importable recipe card, filtering out most general articles and guides. Preview a recipe before adding it to your box.")
+                Surface(
+                    color = androidx.compose.ui.graphics.Color(0xFFFFF3D6),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Row(
+                        Modifier.fillMaxWidth().padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("🍽️", style = MaterialTheme.typography.headlineMedium)
+                        Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                            Text("Find something delicious", fontWeight = FontWeight.ExtraBold, color = PantryInk)
+                            Text(
+                                site?.let { "Search ${it.name} or try a different dish. Preview results before saving." }
+                                    ?: "Search dishes and ingredients. PantryPal ranks likely recipe pages first and filters obvious articles.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = PantryInk.copy(alpha = 0.78f)
+                            )
+                        }
+                    }
+                }
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
                     label = { Text("Dish or ingredient") },
                     placeholder = { Text(if (site == null) "e.g. chicken curry" else "Search ${site.name}, e.g. chicken curry") },
+                    leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
                     singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                    shape = RoundedCornerShape(15.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedBorderColor = PantryOrange,
+                        focusedLabelColor = PantryInk,
+                        unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                        focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                    )
                 )
+                Text("Narrow your search", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = PantryInk)
+                listOf("All", "Quick", "Budget", "High protein", "Vegetarian").chunked(3).forEach { filterRow ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.fillMaxWidth()) {
+                        filterRow.forEach { filter ->
+                            FilterChip(
+                                selected = selectedFilter == filter,
+                                onClick = {
+                                    selectedFilter = filter
+                                    if (query.isNotBlank()) loadResults(query, false, filter)
+                                },
+                                label = { Text(filter) },
+                                colors = FilterChipDefaults.filterChipColors(
+                                    selectedContainerColor = androidx.compose.ui.graphics.Color(0xFFFFE7B0),
+                                    selectedLabelColor = PantryInk
+                                )
+                            )
+                        }
+                    }
+                }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
                     Button(
                         enabled = query.isNotBlank() && !searching && importingUrl == null,
@@ -1264,11 +1360,25 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
                                 ) { Text("🍽️", style = MaterialTheme.typography.headlineMedium) }
                             }
                             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Text(result.title, fontWeight = FontWeight.Bold)
                                 Text(
-                                    Uri.parse(result.url).host.orEmpty().removePrefix("www."),
-                                    style = MaterialTheme.typography.labelSmall
+                                    result.title,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = PantryInk,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    maxLines = 3
                                 )
+                                Surface(
+                                    color = androidx.compose.ui.graphics.Color(0xFFFFE7B0),
+                                    shape = RoundedCornerShape(7.dp)
+                                ) {
+                                    Text(
+                                        Uri.parse(result.url).host.orEmpty().removePrefix("www."),
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = PantryInk,
+                                        maxLines = 1
+                                    )
+                                }
                                 Button(
                                     enabled = importingUrl == null && !searching,
                                     onClick = {
