@@ -303,6 +303,52 @@ private val randomBrowseQueries = listOf(
 )
 
 private class RecipeWebSearch {
+    /**
+     * Online photo lookup for built-in recipes. TheMealDB is tried first; if it has no
+     * matching meal, use a keyword-based photo search service as a best-effort fallback.
+     * These photos are deliberately not cached into the local recipe data.
+     */
+    suspend fun fetchRecipeCardImage(recipe: Recipe): String? = withContext(Dispatchers.IO) {
+        if (recipe.sourceUrl.isNotBlank()) return@withContext fetchImage(recipe.sourceUrl)
+
+        val baseTitle = recipe.title
+            .removePrefix("Slow cooker ")
+            .substringBefore(" - ")
+            .trim()
+        if (baseTitle.isBlank()) return@withContext null
+
+        try {
+            val encoded = URLEncoder.encode(baseTitle, "UTF-8")
+            val connection = (URL("https://www.themealdb.com/api/json/v1/1/search.php?s=$encoded")
+                .openConnection() as HttpURLConnection).apply {
+                connectTimeout = 4500
+                readTimeout = 4500
+                instanceFollowRedirects = true
+                setRequestProperty("User-Agent", "PantryPal Android recipe app")
+            }
+            try {
+                if (connection.responseCode in 200..299) {
+                    val json = JSONObject(connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() })
+                    val meals = json.optJSONArray("meals")
+                    val image = meals?.optJSONObject(0)?.optString("strMealThumb")?.takeIf {
+                        it.startsWith("https://") || it.startsWith("http://")
+                    }
+                    if (!image.isNullOrBlank()) return@withContext image
+                }
+            } finally {
+                connection.disconnect()
+            }
+        } catch (_: Exception) {
+            // Continue to the keyword-photo fallback below.
+        }
+
+        val keywords = baseTitle.lowercase()
+            .replace(Regex("[^a-z0-9 ]"), " ")
+            .trim()
+            .replace(Regex("\\s+"), ",")
+        if (keywords.isBlank()) null else "https://loremflickr.com/640/480/food,$keywords"
+    }
+
     suspend fun search(query: String, siteDomain: String? = null): List<RecipeSearchResult> = withContext(Dispatchers.IO) {
         require(query.isNotBlank()) { "Enter a dish or ingredient to search for." }
         val sitePrefix = siteDomain?.takeIf { it.isNotBlank() }?.let { "site:$it " }.orEmpty()
@@ -1036,8 +1082,8 @@ private fun PantryPalApp(
 
 @Composable
 private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
-    val imageUrl by produceState<String?>(initialValue = null, key1 = recipe.sourceUrl) {
-        value = if (recipe.sourceUrl.isNotBlank()) RecipeWebSearch().fetchImage(recipe.sourceUrl) else null
+    val imageUrl by produceState<String?>(initialValue = null, key1 = recipe.id to recipe.sourceUrl) {
+        value = RecipeWebSearch().fetchRecipeCardImage(recipe)
     }
     val title = recipe.title.lowercase()
     val foodEmoji = when {
