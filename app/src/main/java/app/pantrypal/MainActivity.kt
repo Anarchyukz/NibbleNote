@@ -1283,10 +1283,10 @@ private fun ImportDialog(
                         onClick = {
                             val cleaned = caption.trim()
                             val source = address.ifBlank {
-                                Regex("https?://\\\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+                                Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
                             }
                             onImport(buildSocialRecipeDraft(cleaned, source))
-                        }
+                        },
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Make draft from caption / text") }
                 }
