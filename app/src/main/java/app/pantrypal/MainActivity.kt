@@ -54,7 +54,11 @@ import java.net.URLEncoder
 import java.util.UUID
 
 private val PantryOrange = androidx.compose.ui.graphics.Color(0xFFF59E0B)
-private val PantryInk = androidx.compose.ui.graphics.Color(0xFF1F2937)
+private val PantryInk = androidx.compose.ui.graphics.Color(0xFF20251F)
+private val PantryCream = androidx.compose.ui.graphics.Color(0xFFFFFAF3)
+private val PantrySage = androidx.compose.ui.graphics.Color(0xFF527568)
+private val PantryMuted = androidx.compose.ui.graphics.Color(0xFF73766F)
+private val PantryLine = androidx.compose.ui.graphics.Color(0xFFECE5DA)
 
 data class Recipe(
     val id: String = UUID.randomUUID().toString(),
@@ -705,7 +709,21 @@ class MainActivity : ComponentActivity() {
         val sharedImage = sharedIntent?.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
             ?.takeIf { sharedIntent?.type?.startsWith("image/") == true }
         setContent {
-            MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
+            MaterialTheme(
+                colorScheme = lightColorScheme(
+                    primary = PantryOrange,
+                    onPrimary = PantryInk,
+                    primaryContainer = androidx.compose.ui.graphics.Color(0xFFFFE7B5),
+                    onPrimaryContainer = PantryInk,
+                    secondary = PantrySage,
+                    onSecondary = androidx.compose.ui.graphics.Color.White,
+                    background = PantryCream,
+                    surface = androidx.compose.ui.graphics.Color.White,
+                    onSurface = PantryInk,
+                    surfaceVariant = androidx.compose.ui.graphics.Color(0xFFF4EFE7),
+                    outline = PantryLine
+                )
+            ) {
                 PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
                     onBackup = { createBackup.launch("PantryPal-backup.json") },
                     onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) },
@@ -755,41 +773,49 @@ private fun PantryPalApp(
     }
 
     Scaffold(
-        containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5),
+        containerColor = PantryCream,
         topBar = {
             TopAppBar(
                 title = {
-                    Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                        Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
-                            style = MaterialTheme.typography.titleLarge)
-                        Text("YOUR PERSONAL RECIPE BOX", color = androidx.compose.ui.graphics.Color(0xFF6B7280),
-                            style = MaterialTheme.typography.labelSmall, letterSpacing = 1.2f.sp)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Surface(shape = RoundedCornerShape(14.dp), color = PantryOrange, modifier = Modifier.size(42.dp)) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Text("P", color = PantryInk, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall)
+                            }
+                        }
+                        Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
+                            Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
+                                style = MaterialTheme.typography.titleLarge)
+                            Text("YOUR PERSONAL RECIPE BOX", color = PantryMuted,
+                                style = MaterialTheme.typography.labelSmall, letterSpacing = 1.1f.sp)
+                        }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = androidx.compose.ui.graphics.Color(0xFFF7F7F5))
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = PantryCream)
             )
         }
     ) { inset ->
         Column(
-            Modifier.fillMaxSize().padding(inset).padding(horizontal = 18.dp)
+            Modifier.fillMaxSize().background(PantryCream).padding(inset).padding(horizontal = 18.dp)
         ) {
             Card(
-                shape = RoundedCornerShape(22.dp),
+                shape = RoundedCornerShape(26.dp),
                 colors = CardDefaults.cardColors(containerColor = PantryInk),
+                elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Row(
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp),
+                    Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 19.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text("YOUR KITCHEN, ORGANISED", color = PantryOrange,
+                        Text("GOOD FOOD STARTS HERE", color = PantryOrange,
                             style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                         Text("What are we cooking?", color = androidx.compose.ui.graphics.Color.White,
                             style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                        Text("Save favourites or discover something new.",
-                            color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodySmall)
+                        Text("Your recipes, weekly meals and new ideas — all in one place.",
+                            color = androidx.compose.ui.graphics.Color(0xFFD1D5DB), style = MaterialTheme.typography.bodyMedium)
                     }
                     Button(
                         onClick = { selectedBrowseSite = null; showRecipeSearch = true },
@@ -804,7 +830,7 @@ private fun PantryPalApp(
 
             Row(
                 modifier = Modifier.fillMaxWidth().background(
-                    androidx.compose.ui.graphics.Color(0xFFECECE8), RoundedCornerShape(16.dp)
+                    androidx.compose.ui.graphics.Color(0xFFF0E9DE), RoundedCornerShape(18.dp)
                 ).padding(4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
@@ -813,7 +839,7 @@ private fun PantryPalApp(
                     Button(
                         onClick = { homeSection = section },
                         modifier = Modifier.weight(1f),
-                        shape = RoundedCornerShape(12.dp),
+                        shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (active) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Transparent,
                             contentColor = if (active) PantryInk else androidx.compose.ui.graphics.Color(0xFF6B7280)
@@ -824,7 +850,7 @@ private fun PantryPalApp(
                         Text(
                             when (section) {
                                 "My recipes" -> "My recipes (${recipes.size})"
-                                "Slow cooker" -> "Slow cooker (200)"
+                                "Slow cooker" -> "Slow cooker (\${slowCookerRecipes.size})"
                                 else -> "Browse sites"
                             },
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
@@ -938,7 +964,7 @@ private fun PantryPalApp(
                 } else if (homeSection == "Slow cooker") {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)) {
-                            Text("200 RECIPES INCLUDED OFFLINE", style = MaterialTheme.typography.labelMedium,
+                            Text("\${slowCookerRecipes.size} RECIPES INCLUDED", style = MaterialTheme.typography.labelMedium,
                                 color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
                             Text("Slow cooker favourites", style = MaterialTheme.typography.titleLarge,
                                 color = PantryInk, fontWeight = FontWeight.ExtraBold)
@@ -950,7 +976,7 @@ private fun PantryPalApp(
                         OutlinedTextField(
                             value = slowCookerSearch,
                             onValueChange = { slowCookerSearch = it },
-                            placeholder = { Text("Search 200 slow cooker recipes") },
+                            placeholder = { Text("Search slow cooker recipes") },
                             leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
                             singleLine = true,
                             shape = RoundedCornerShape(15.dp),
@@ -1144,13 +1170,14 @@ private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
     }
     Card(
         onClick = onClick,
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
             Box(
-                modifier = Modifier.fillMaxWidth().height(148.dp)
+                modifier = Modifier.fillMaxWidth().height(184.dp)
                     .background(androidx.compose.ui.graphics.Color(0xFFFFF1D6)),
                 contentAlignment = Alignment.Center
             ) {
@@ -1175,7 +1202,7 @@ private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
                     }
                 }
             }
-            Column(Modifier.fillMaxWidth().padding(horizontal = 15.dp, vertical = 13.dp),
+            Column(Modifier.fillMaxWidth().padding(horizontal = 17.dp, vertical = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(recipe.title, style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.ExtraBold, color = PantryInk, maxLines = 2)
@@ -1207,7 +1234,7 @@ private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
                         }
                     }
                     Spacer(Modifier.weight(1f))
-                    Text("View recipe  →", style = MaterialTheme.typography.labelMedium,
+                    Text("VIEW RECIPE  ↗", style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.Bold, color = PantryOrange)
                 }
             }
