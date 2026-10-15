@@ -770,6 +770,7 @@ private fun NibbleNoteApp(
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
     var browseThemeQuery by remember { mutableStateOf("") }
     var browseFilter by remember { mutableStateOf("") }
+    var selectedBrowseCategory by remember { mutableStateOf("Quick & easy") }
     var browsingUrl by remember { mutableStateOf<String?>(null) }
     var homeSection by remember { mutableStateOf("My recipes") }
     var slowCookerSearch by remember { mutableStateOf("") }
@@ -1018,20 +1019,17 @@ private fun NibbleNoteApp(
                     }
                 } else {
                     item {
-                        Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)) {
-                            Text("FIND YOUR NEXT FAVOURITE", style = MaterialTheme.typography.labelMedium,
-                                color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
-                            Text("Browse recipe websites", style = MaterialTheme.typography.titleLarge,
-                                color = PantryInk, fontWeight = FontWeight.ExtraBold)
-                            Text("Pick a site, search for a dish, then preview it before adding it to your recipe box.",
-                                style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
+                        Column(verticalArrangement = Arrangement.spacedBy(5.dp), modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)) {
+                            Text("DISCOVER RECIPES", style = MaterialTheme.typography.labelMedium, color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.2.sp)
+                            Text("Browse recipe sites", style = MaterialTheme.typography.headlineSmall, color = PantryInk, fontWeight = FontWeight.ExtraBold)
+                            Text("Choose a topic or search for a website.", style = MaterialTheme.typography.bodySmall, color = PantryMuted)
                         }
                     }
                     item {
                         OutlinedTextField(
                             value = browseFilter,
                             onValueChange = { browseFilter = it },
-                            placeholder = { Text("Find a cuisine, category or website") },
+                            placeholder = { Text("Search sites or topics") },
                             leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
                             singleLine = true,
                             shape = RoundedCornerShape(15.dp),
@@ -1043,51 +1041,76 @@ private fun NibbleNoteApp(
                             )
                         )
                     }
-                    items(
-                        browseCategories.filter { category ->
-                            browseFilter.isBlank() ||
-                                category.title.contains(browseFilter, ignoreCase = true) ||
-                                category.subtitle.contains(browseFilter, ignoreCase = true) ||
-                                browseSites.any { it.category == category.title && it.name.contains(browseFilter, ignoreCase = true) }
-                        },
-                        key = { it.title }
-                    ) { category ->
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Text(category.emoji, style = MaterialTheme.typography.headlineMedium)
-                                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                                    Text(category.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.ExtraBold, color = PantryInk)
-                                    Text(category.subtitle, style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
-                                }
-                            }
-                            browseSites.filter { it.category == category.title }.chunked(2).forEach { rowSites ->
-                                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
-                                    rowSites.forEach { site ->
-                                        Card(
-                                            onClick = { browsingUrl = "https://${site.domain}${site.path}" },
-                                            modifier = Modifier.weight(1f), shape = RoundedCornerShape(16.dp),
-                                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
-                                        ) {
-                                            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Text(site.emoji, style = MaterialTheme.typography.headlineSmall)
-                                                Text(site.name, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
-                                                    color = PantryInk, maxLines = 2)
-                                            }
-                                        }
-                                    }
-                                    if (rowSites.size == 1) Spacer(Modifier.weight(1f))
-                                }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            browseCategories.filter { category ->
+                                browseFilter.isBlank() ||
+                                    category.title.contains(browseFilter, ignoreCase = true) ||
+                                    browseSites.any { it.category == category.title && it.name.contains(browseFilter, ignoreCase = true) }
+                            }.forEach { category ->
+                                FilterChip(
+                                    selected = selectedBrowseCategory == category.title,
+                                    onClick = { selectedBrowseCategory = category.title },
+                                    label = { Text(category.title) },
+                                    leadingIcon = if (selectedBrowseCategory == category.title) ({ Text(category.emoji) }) else null,
+                                    shape = RoundedCornerShape(20.dp)
+                                )
                             }
                         }
                     }
                     item {
-                        OutlinedButton(
-                            onClick = { selectedBrowseSite = null; showRecipeSearch = true },
+                        browseCategories.firstOrNull { it.title == selectedBrowseCategory }?.let { category ->
+                            Column(modifier = Modifier.fillMaxWidth().padding(top = 4.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                                Text(category.title, style = MaterialTheme.typography.titleMedium, color = PantryInk, fontWeight = FontWeight.Bold)
+                                Text(category.subtitle, style = MaterialTheme.typography.bodySmall, color = PantryMuted)
+                            }
+                        }
+                    }
+                    items(
+                        browseSites.filter { site ->
+                            val matchesSearch = browseFilter.isBlank() ||
+                                site.name.contains(browseFilter, ignoreCase = true) ||
+                                site.domain.contains(browseFilter, ignoreCase = true) ||
+                                site.category.contains(browseFilter, ignoreCase = true)
+                            matchesSearch && (browseFilter.isNotBlank() || site.category == selectedBrowseCategory)
+                        },
+                        key = { it.name }
+                    ) { site ->
+                        Card(
+                            onClick = { browsingUrl = "https://${site.domain}${site.path}" },
                             modifier = Modifier.fillMaxWidth(),
                             shape = RoundedCornerShape(14.dp),
-                            contentPadding = PaddingValues(vertical = 12.dp)
-                        ) { Text("Search all websites") }
+                            colors = CardDefaults.cardColors(containerColor = androidx.compose.ui.graphics.Color.White)
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Surface(shape = RoundedCornerShape(12.dp), color = PantryCream, modifier = Modifier.size(44.dp)) {
+                                    Box(contentAlignment = Alignment.Center) { Text(site.emoji, style = MaterialTheme.typography.titleLarge) }
+                                }
+                                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(site.name, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = PantryInk)
+                                    Text(site.domain, style = MaterialTheme.typography.bodySmall, color = PantryMuted)
+                                }
+                                Text("›", style = MaterialTheme.typography.headlineMedium, color = PantryMuted)
+                            }
+                        }
+                    }
+                    item {
+                        if (browseSites.none { site ->
+                            val matchesSearch = browseFilter.isBlank() || site.name.contains(browseFilter, ignoreCase = true) || site.domain.contains(browseFilter, ignoreCase = true) || site.category.contains(browseFilter, ignoreCase = true)
+                            matchesSearch && (browseFilter.isNotBlank() || site.category == selectedBrowseCategory)
+                        }) {
+                            Text("No sites found. Try another search.", color = PantryMuted, modifier = Modifier.padding(vertical = 12.dp))
+                        }
+                        OutlinedButton(onClick = { selectedBrowseSite = null; showRecipeSearch = true }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
+                            Text("Search all websites")
+                        }
                     }
                 }
             }
