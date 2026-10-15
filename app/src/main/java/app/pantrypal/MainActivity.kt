@@ -1106,6 +1106,8 @@ private fun ImportDialog(
     var error by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val socialSource = when {
+        address.contains("facebook.com", true) || address.contains("fb.watch", true) ||
+            sharedText.contains("facebook.com", true) || sharedText.contains("fb.watch", true) -> "Facebook"
         address.contains("instagram.com", true) || sharedText.contains("instagram.com", true) -> "Instagram"
         address.contains("tiktok.com", true) || sharedText.contains("tiktok.com", true) -> "TikTok"
         else -> null
@@ -1119,7 +1121,9 @@ private fun ImportDialog(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
-                    if (socialSource != null)
+                    if (socialSource == "Facebook")
+                        "Facebook often hides post content behind login or app-only pages, so automatic link import may fail. If the recipe is visible in the post, copy its text and paste it below. PantryPal will make an editable draft from the text."
+                    else if (socialSource != null)
                         "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
                     else if (sharedText.isNotBlank())
                         "Shared from another app. PantryPal will try the link first. If the page cannot be read, you can use the shared text to make a draft."
@@ -1145,7 +1149,11 @@ private fun ImportDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        "Tip: in Instagram or TikTok, open the post, copy its caption or recipe text, then paste it here. PantryPal cannot reliably read text baked into a video.",
+                        when (socialSource) {
+                            "Facebook" -> "Tip: open the Facebook post, tap its menu and choose Copy text or Copy link where available. Paste the actual recipe text here; a link alone may not contain the recipe. Photos with text are not read automatically."
+                            "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. PantryPal cannot reliably read text baked into a video."
+                            else -> "Paste the recipe text here. Photos and text baked into videos are not read automatically."
+                        },
                         style = MaterialTheme.typography.bodySmall
                     )
                     OutlinedButton(
@@ -1160,16 +1168,31 @@ private fun ImportDialog(
                                 Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
                             }
                             val sourceName = when {
+                                source.contains("facebook.com", true) || source.contains("fb.watch", true) -> "Facebook"
                                 source.contains("instagram.com", true) -> "Instagram"
                                 source.contains("tiktok.com", true) -> "TikTok"
                                 else -> "shared post"
                             }
+                            val recipeLines = cleaned.lines().map { it.trim() }
+                                .filter { it.isNotBlank() && !it.startsWith("http", true) }
+                            val ingredientPattern = Regex(
+                                """^(?:[-•*]\\s*)?(?:\\d+(?:[./]\\d+)?\\s*)?(?:g|kg|ml|l|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|lb|cloves?|packets?|slices?|cans?|pinch(?:es)?|handfuls?)\\b""",
+                                RegexOption.IGNORE_CASE
+                            )
+                            val stepPattern = Regex(
+                                """^(?:(?:step\\s*)?\\d+[.)]?\\s+|[-•*]\\s+)?(?:preheat|heat|mix|stir|add|chop|slice|pour|bake|fry|boil|simmer|cook|serve|combine|place|whisk|blend|season|spread|drain|cook|then\\b)""",
+                                RegexOption.IGNORE_CASE
+                            )
+                            val ingredients = recipeLines.filter { ingredientPattern.containsMatchIn(it) || it.startsWith("ingredient", true) }
+                            val steps = recipeLines.filter { stepPattern.containsMatchIn(it) }
+                            val extractedIngredients = ingredients.joinToString("\\n")
+                            val extractedSteps = steps.joinToString("\\n")
                             onImport(
                                 Recipe(
                                     title = titleCandidate?.takeIf { it.isNotBlank() } ?: "Recipe from $sourceName",
-                                    description = "Draft from social post text. Check quantities and cooking steps against the original post.",
-                                    ingredients = "",
-                                    instructions = cleaned,
+                                    description = "Draft from social post text. Check the extracted ingredients, quantities and cooking steps against the original post.",
+                                    ingredients = extractedIngredients,
+                                    instructions = if (extractedSteps.isNotBlank()) extractedSteps else cleaned,
                                     sourceUrl = source
                                 )
                             )
