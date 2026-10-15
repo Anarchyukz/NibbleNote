@@ -15,6 +15,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import coil.compose.AsyncImage
@@ -798,7 +799,7 @@ private fun NibbleNoteApp(
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         Surface(shape = RoundedCornerShape(14.dp), color = PantryOrange, modifier = Modifier.size(42.dp)) {
                             Box(contentAlignment = Alignment.Center) {
-                                Text("P", color = PantryInk, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall)
+                                Text("N", color = PantryInk, fontWeight = FontWeight.Black, style = MaterialTheme.typography.headlineSmall)
                             }
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
@@ -1766,6 +1767,18 @@ private fun NutritionValue(label: String, value: String, modifier: Modifier = Mo
 
 @Composable
 private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onAdd: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    val heroImage by produceState<String?>(initialValue = null, key1 = recipe.id to recipe.sourceUrl) {
+        value = RecipeWebSearch().fetchRecipeCardImage(recipe)
+    }
+    val recipeEmoji = when {
+        listOf("fish", "salmon", "tuna", "prawn", "shrimp", "seafood").any { it in recipe.title.lowercase() } -> "🐟"
+        listOf("chicken", "turkey", "roast", "beef", "steak", "pork", "meat").any { it in recipe.title.lowercase() } -> "🍗"
+        listOf("cake", "bake", "cookie", "brownie", "dessert", "pudding").any { it in recipe.title.lowercase() } -> "🍰"
+        listOf("salad", "vegetable", "veggie", "vegan").any { it in recipe.title.lowercase() } -> "🥗"
+        listOf("pasta", "spaghetti", "lasagne", "noodle").any { it in recipe.title.lowercase() } -> "🍝"
+        listOf("soup", "stew", "curry", "chilli").any { it in recipe.title.lowercase() } -> "🍲"
+        else -> "🍽️"
+    }
     var cookingMode by remember(recipe.id) { mutableStateOf(false) }
     var servings by remember(recipe.id) { mutableIntStateOf(recipe.servings.toIntOrNull()?.coerceAtLeast(1) ?: 2) }
     val ingredients = remember(recipe.ingredients, servings, recipe.servings) {
@@ -1786,6 +1799,35 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
             shadowElevation = 16.dp
         ) {
             Column {
+                Box(
+                    modifier = Modifier.fillMaxWidth().height(190.dp)
+                        .background(androidx.compose.ui.graphics.Color(0xFFFFF1D6)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (!heroImage.isNullOrBlank()) {
+                        AsyncImage(
+                            model = heroImage,
+                            contentDescription = recipe.title,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Text(recipeEmoji, style = MaterialTheme.typography.displayLarge)
+                    }
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+                        color = androidx.compose.ui.graphics.Color.White.copy(alpha = 0.94f),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(
+                            if (recipe.sourceUrl.isNotBlank()) "RECIPE PREVIEW" else "YOUR RECIPE BOX",
+                            modifier = Modifier.padding(horizontal = 11.dp, vertical = 6.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = PantryInk
+                        )
+                    }
+                }
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .background(PantryOrange)
