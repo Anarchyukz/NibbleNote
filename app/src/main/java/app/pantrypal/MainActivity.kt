@@ -70,6 +70,7 @@ data class Recipe(
     val ingredients: String = "",
     val instructions: String = "",
     val sourceUrl: String = "",
+    val imageUrl: String = "",
     val prepTime: String = "",
     val cookTime: String = "",
     val servings: String = "2",
@@ -102,6 +103,7 @@ class RecipeStore(context: Context) {
                 ingredients = o.optString("ingredients"),
                 instructions = o.optString("instructions"),
                 sourceUrl = o.optString("sourceUrl"),
+                imageUrl = o.optString("imageUrl"),
                 prepTime = o.optString("prepTime"),
                 cookTime = o.optString("cookTime"),
                 servings = o.optString("servings", "2"),
@@ -229,12 +231,27 @@ private class RecipeImporter {
             val parsed = number.toDoubleOrNull() ?: return ""
             return if (parsed % 1.0 == 0.0) parsed.toInt().toString() else String.format(java.util.Locale.UK, "%.1f", parsed)
         }
+        val imageUrl = when (val image = o.opt("image")) {
+            is String -> image
+            is JSONObject -> image.optString("url").ifBlank { image.optString("@id") }
+            is JSONArray -> (0 until image.length()).asSequence().mapNotNull { index ->
+                when (val item = image.opt(index)) {
+                    is String -> item
+                    is JSONObject -> item.optString("url").ifBlank { item.optString("@id") }.ifBlank { null }
+                    else -> null
+                }
+            }.firstOrNull()
+            else -> null
+        }.orEmpty().let { raw ->
+            try { URL(URL(address), raw).toString() } catch (_: Exception) { raw }
+        }
         return Recipe(
             title = o.optString("name").ifBlank { "Imported recipe" },
             description = o.optString("description"),
             ingredients = ingredients,
             instructions = steps.joinToString("\n\n"),
             sourceUrl = address,
+            imageUrl = imageUrl,
             prepTime = o.optString("prepTime"),
             cookTime = o.optString("cookTime"),
             servings = o.opt("recipeYield")?.toString()?.replace("[", "")?.replace("]", "")?.replace("\"", "") ?: "2",
@@ -676,7 +693,7 @@ private class RecipeWebSearch {
 private fun recipeToJson(r: Recipe) = JSONObject().apply {
     put("id", r.id); put("title", r.title); put("description", r.description)
     put("ingredients", r.ingredients); put("instructions", r.instructions)
-    put("sourceUrl", r.sourceUrl); put("prepTime", r.prepTime)
+    put("sourceUrl", r.sourceUrl); put("imageUrl", r.imageUrl); put("prepTime", r.prepTime)
     put("cookTime", r.cookTime); put("servings", r.servings)
     put("calories", r.calories); put("protein", r.protein)
     put("carbs", r.carbs); put("fat", r.fat)
@@ -687,7 +704,7 @@ private fun recipeFromJson(o: JSONObject) = Recipe(
     title = o.optString("title", "Untitled recipe"),
     description = o.optString("description"), ingredients = o.optString("ingredients"),
     instructions = o.optString("instructions"), sourceUrl = o.optString("sourceUrl"),
-    prepTime = o.optString("prepTime"), cookTime = o.optString("cookTime"),
+    imageUrl = o.optString("imageUrl"), prepTime = o.optString("prepTime"), cookTime = o.optString("cookTime"),
     servings = o.optString("servings", "2"),
     calories = o.optString("calories"), protein = o.optString("protein"),
     carbs = o.optString("carbs"), fat = o.optString("fat")
@@ -1200,8 +1217,9 @@ private fun NibbleNoteApp(
 
 @Composable
 private fun SavedRecipeCard(recipe: Recipe, onClick: () -> Unit) {
-    val imageUrl by produceState<String?>(initialValue = null, key1 = recipe.id to recipe.sourceUrl) {
-        value = RecipeWebSearch().fetchRecipeCardImage(recipe)
+    val imageUrl by produceState<String?>(initialValue = recipe.imageUrl.takeIf { it.isNotBlank() }, key1 = recipe.id to (recipe.sourceUrl to recipe.imageUrl)) {
+        if (recipe.imageUrl.isNotBlank()) value = recipe.imageUrl
+        else value = RecipeWebSearch().fetchRecipeCardImage(recipe)
     }
     val title = recipe.title.lowercase()
     val foodEmoji = when {
@@ -1794,8 +1812,9 @@ private fun NutritionValue(label: String, value: String, modifier: Modifier = Mo
 
 @Composable
 private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAnother: () -> Unit, onAdd: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
-    val heroImage by produceState<String?>(initialValue = null, key1 = recipe.id to recipe.sourceUrl) {
-        value = RecipeWebSearch().fetchRecipeCardImage(recipe)
+    val heroImage by produceState<String?>(initialValue = recipe.imageUrl.takeIf { it.isNotBlank() }, key1 = recipe.id to (recipe.sourceUrl to recipe.imageUrl)) {
+        if (recipe.imageUrl.isNotBlank()) value = recipe.imageUrl
+        else value = RecipeWebSearch().fetchRecipeCardImage(recipe)
     }
     val recipeEmoji = when {
         listOf("fish", "salmon", "tuna", "prawn", "shrimp", "seafood").any { it in recipe.title.lowercase() } -> "🐟"
