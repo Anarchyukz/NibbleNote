@@ -111,12 +111,12 @@ class RecipeStore(context: Context) {
     fun backupJson(): String {
         val array = JSONArray()
         load().forEach { array.put(recipeToJson(it)) }
-        return JSONObject().put("format", "PantryPal backup").put("version", 1).put("recipes", array).toString(2)
+        return JSONObject().put("format", "NibbleNote backup").put("version", 1).put("recipes", array).toString(2)
     }
 
     fun restoreJson(json: String): List<Recipe> {
         val root = JSONObject(json)
-        require(root.optString("format") == "PantryPal backup") { "This file is not a PantryPal backup." }
+        require(root.optString("format") == "NibbleNote backup" || root.optString("format") == "PantryPal backup") { "This file is not a NibbleNote backup." }
         val array = root.optJSONArray("recipes") ?: throw IllegalArgumentException("The backup contains no recipe list.")
         return (0 until array.length()).mapNotNull { i -> array.optJSONObject(i)?.let(::recipeFromJson) }
     }
@@ -158,7 +158,7 @@ private class RecipeImporter {
             connectTimeout = 10000
             readTimeout = 12000
             instanceFollowRedirects = true
-            setRequestProperty("User-Agent", "PantryPal/0.1 open-source recipe importer")
+            setRequestProperty("User-Agent", "NibbleNote/0.1 open-source recipe importer")
         }
         try {
             val html = connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
@@ -348,7 +348,7 @@ private class RecipeWebSearch {
                 connectTimeout = 4500
                 readTimeout = 4500
                 instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "PantryPal Android recipe app")
+                setRequestProperty("User-Agent", "NibbleNote Android recipe app")
             }
             try {
                 if (connection.responseCode in 200..299) {
@@ -379,7 +379,7 @@ private class RecipeWebSearch {
                 connectTimeout = 6500
                 readTimeout = 6500
                 instanceFollowRedirects = true
-                setRequestProperty("User-Agent", "PantryPal/1.0 (Android recipe app)")
+                setRequestProperty("User-Agent", "NibbleNote/1.0 (Android recipe app)")
             }
             try {
                 if (connection.responseCode in 200..299) {
@@ -697,7 +697,7 @@ class MainActivity : ComponentActivity() {
         if (uri != null) try {
             contentResolver.openOutputStream(uri)?.bufferedWriter()?.use { it.write(store.backupJson()) }
                 ?: throw IllegalStateException("Could not write the backup file.")
-            Toast.makeText(this, "PantryPal backup saved", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "NibbleNote backup saved", Toast.LENGTH_LONG).show()
         } catch (e: Exception) {
             Toast.makeText(this, "Backup failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
@@ -741,8 +741,8 @@ class MainActivity : ComponentActivity() {
                     outline = PantryLine
                 )
             ) {
-                PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
-                    onBackup = { createBackup.launch("PantryPal-backup.json") },
+                NibbleNoteApp(store.load(), store::save, store.loadPlan(), store::savePlan,
+                    onBackup = { createBackup.launch("NibbleNote-backup.json") },
                     onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) },
                     initialSharedText = sharedText, initialSharedUrl = sharedUrl, initialSharedImage = sharedImage)
             }
@@ -752,7 +752,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PantryPalApp(
+private fun NibbleNoteApp(
     initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit,
     initialPlan: List<PlannedMeal>, persistPlan: (List<PlannedMeal>) -> Unit,
     onBackup: () -> Unit, onRestore: () -> Unit,
@@ -801,7 +801,7 @@ private fun PantryPalApp(
                             }
                         }
                         Column(verticalArrangement = Arrangement.spacedBy(1.dp)) {
-                            Text("PantryPal", fontWeight = FontWeight.ExtraBold, color = PantryInk,
+                            Text("NibbleNote", fontWeight = FontWeight.ExtraBold, color = PantryInk,
                                 style = MaterialTheme.typography.titleLarge)
                             Text("YOUR PERSONAL RECIPE BOX", color = PantryMuted,
                                 style = MaterialTheme.typography.labelSmall, letterSpacing = 1.1f.sp)
@@ -1403,9 +1403,9 @@ private fun ImportDialog(
                     else if (socialSource != null)
                         "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
                     else if (sharedText.isNotBlank())
-                        "Shared from another app. PantryPal will try the link first. If the page cannot be read, you can use the shared text to make a draft."
+                        "Shared from another app. NibbleNote will try the link first. If the page cannot be read, you can use the shared text to make a draft."
                     else
-                        "Paste a recipe webpage URL. PantryPal looks for structured recipe data on the page."
+                        "Paste a recipe webpage URL. NibbleNote looks for structured recipe data on the page."
                 )
                 OutlinedTextField(
                     value = address,
@@ -1463,7 +1463,7 @@ private fun ImportDialog(
                     Text(
                         when (socialSource) {
                             "Facebook" -> "Share the post to PantryPal, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
-                            "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. PantryPal cannot reliably read text baked into a video."
+                            "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. NibbleNote cannot reliably read text baked into a video."
                             else -> "Paste recipe text or choose a screenshot and tap Read image text. Screenshot text is recognised on your device."
                         },
                         style = MaterialTheme.typography.bodySmall
@@ -1724,7 +1724,7 @@ private fun RecipeSearchDialog(site: BrowseSite? = null, initialQuery: String = 
                     }
                 }
                 Text(
-                    "PantryPal reads recipe details where the website makes them available. Some sites block importing; recipes are not saved until you tap Add to box.",
+                    "NibbleNote reads recipe details where the website makes them available. Some sites block importing; recipes are not saved until you tap Add to box.",
                     style = MaterialTheme.typography.bodySmall
                 )
             }
