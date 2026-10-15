@@ -476,7 +476,9 @@ private class RecipeWebSearch {
                     Triple(RecipeSearchResult(title, link), if (resultClass || inBingResultBlock) 0 else 1, match.range.first)
                 }.distinctBy { it.first.url }
                     .sortedWith(compareBy<Triple<RecipeSearchResult, Int, Int>> { it.second }.thenBy { it.third })
-                    .map { it.first }.take(12).toList()
+                    // Do not truncate raw search anchors before recipe scoring: search engines put
+                    // ads, grocery listings and navigation links first, which can hide real recipes.
+                    .map { it.first }.toList()
                 if (parsed.isNotEmpty()) {
                     // Prefer known cooking sites and likely recipe URLs, but don't require structured data:
                     // many legitimate recipe pages omit JSON-LD or block direct validation requests.
