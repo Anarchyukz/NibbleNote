@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="theme-color" content="#f59e0b">
   <title>NibbleNote — Your recipes, organised</title>
-  <meta name="description" content="NibbleNote is a free, open-source Android recipe app for importing recipes, planning meals and creating shopping lists.">
+  <meta name="description" content="NibbleNote is a free, open-source Android recipe app with no AI, no ads, no subscriptions, and local-first recipe storage on your device.">
   <style>
     :root {
       --bg: #0b0f17;
@@ -98,6 +98,31 @@
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
     }
+
+    .promise-strip {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 10px;
+      margin: 0 auto 28px;
+      max-width: 760px;
+    }
+
+    .promise-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 9px 13px;
+      border: 1px solid rgba(245, 158, 11, 0.28);
+      background: rgba(245, 158, 11, 0.08);
+      border-radius: 999px;
+      color: var(--text);
+      font-size: 0.88rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .promise-item span { color: var(--primary); }
 
     .hero-desc {
       font-size: 1.2rem;
@@ -211,6 +236,12 @@
     <main>
       <section class="hero">
         <span class="badge">Your Kitchen, Better Organised</span>
+        <div class="promise-strip" aria-label="NibbleNote principles">
+          <div class="promise-item"><span>✓</span> No AI</div>
+          <div class="promise-item"><span>✓</span> No ads</div>
+          <div class="promise-item"><span>✓</span> No subscriptions</div>
+          <div class="promise-item"><span>✓</span> Recipes stored locally</div>
+        </div>
         <h1>Less searching.<br><span>More cooking.</span></h1>
         <p class="hero-desc">
           Keep your favourite recipes together, import ingredients and instructions from supported websites, and make it easier to decide what to cook.
