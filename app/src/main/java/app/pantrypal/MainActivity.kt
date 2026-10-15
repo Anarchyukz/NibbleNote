@@ -829,23 +829,26 @@ private fun PantryPalApp(
             }
 
             Row(
-                modifier = Modifier.fillMaxWidth().background(
-                    androidx.compose.ui.graphics.Color(0xFFF0E9DE), RoundedCornerShape(18.dp)
-                ).padding(4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp, bottom = 12.dp)
+                    .background(androidx.compose.ui.graphics.Color(0xFFF0E9DE), RoundedCornerShape(18.dp))
+                    .padding(5.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 listOf("My recipes", "Slow cooker", "Browse sites").forEach { section ->
                     val active = homeSection == section
                     Button(
                         onClick = { homeSection = section },
-                        modifier = Modifier.weight(1f),
+                        modifier = Modifier.weight(1f).heightIn(min = 44.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = if (active) androidx.compose.ui.graphics.Color.White else androidx.compose.ui.graphics.Color.Transparent,
                             contentColor = if (active) PantryInk else androidx.compose.ui.graphics.Color(0xFF6B7280)
                         ),
-                        elevation = ButtonDefaults.buttonElevation(defaultElevation = if (active) 1.dp else 0.dp),
-                        contentPadding = PaddingValues(vertical = 10.dp)
+                        elevation = ButtonDefaults.buttonElevation(defaultElevation = if (active) 2.dp else 0.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 10.dp)
                     ) {
                         Text(
                             when (section) {
@@ -854,8 +857,9 @@ private fun PantryPalApp(
                                 else -> "Browse sites"
                             },
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
-                            style = MaterialTheme.typography.labelLarge,
-                            maxLines = 1
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
