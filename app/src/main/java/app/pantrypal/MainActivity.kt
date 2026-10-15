@@ -1120,21 +1120,21 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
 
 private fun buildSocialRecipeDraft(cleanedText: String, source: String): Recipe {
     val lines = cleanedText.lines()
-        .map { it.replace(Regex("""https?://\\S+""", RegexOption.IGNORE_CASE), "").trim() }
+        .map { it.replace(Regex("""https?://\S+""", RegexOption.IGNORE_CASE), "").trim() }
         .filter { it.isNotBlank() }
-    val ingredientHeader = Regex("""^(ingredients?|what you('ll| will) need|you will need)\\s*:?$""", RegexOption.IGNORE_CASE)
-    val methodHeader = Regex("""^(method|directions|instructions|steps|preparation|how to make)\\s*:?$""", RegexOption.IGNORE_CASE)
+    val ingredientHeader = Regex("""^(ingredients?|what you('ll| will) need|you will need)\s*:?$""", RegexOption.IGNORE_CASE)
+    val methodHeader = Regex("""^(method|directions|instructions|steps|preparation|how to make)\s*:?$""", RegexOption.IGNORE_CASE)
     val title = lines.firstOrNull { line ->
         line.length in 4..90 && !line.startsWith("#") &&
             !ingredientHeader.matches(line) && !methodHeader.matches(line) &&
-            !line.matches(Regex("""(?i)^(like|comment|share|follow|ingredients|method|instructions)\\W*$"""))
+            !line.matches(Regex("""(?i)^(like|comment|share|follow|ingredients|method|instructions)\W*$"""))
     }?.trim('#', '*', ' ', '-', '•')?.take(80).orEmpty()
     val quantityOrIngredient = Regex(
-        """^(?:[-•*]\\s*)?(?:(?:\\d+(?:\\s+\\d+/\\d+|[./]\\d+)?|\\d+/\\d+)\\s*)?(?:g|kg|mg|ml|l|litres?|liters?|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|lb|lbs|cloves?|packets?|sachets?|slices?|cans?|tins?|pinches?|handfuls?|sprigs?|bunches?|large|medium|small)\\b|^(?:[-•*]\\s*)?\\d+(?:[./]\\d+)?\\s+\\w+""",
+        """^(?:[-•*]\s*)?(?:(?:\d+(?:\s+\d+/\d+|[./]\d+)?|\d+/\d+)\s*)?(?:g|kg|mg|ml|l|litres?|liters?|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|lb|lbs|cloves?|packets?|sachets?|slices?|cans?|tins?|pinches?|handfuls?|sprigs?|bunches?|large|medium|small)\b|^(?:[-•*]\s*)?\d+(?:[./]\d+)?\s+\w+""",
         RegexOption.IGNORE_CASE
     )
     val step = Regex(
-        """^(?:(?:step\\s*)?\\d+[.)]?\\s+|[-•*]\\s+)?(?:preheat|heat|mix|stir|add|chop|slice|pour|bake|fry|boil|simmer|cook|serve|combine|place|whisk|blend|season|spread|drain|mash|knead|roast|grill|fold|beat|bring|leave|allow|transfer|remove|cover|reduce|meanwhile|once|when|until|finally|then)\\b""",
+        """^(?:(?:step\s*)?\d+[.)]?\s+|[-•*]\s+)?(?:preheat|heat|mix|stir|add|chop|slice|pour|bake|fry|boil|simmer|cook|serve|combine|place|whisk|blend|season|spread|drain|mash|knead|roast|grill|fold|beat|bring|leave|allow|transfer|remove|cover|reduce|meanwhile|once|when|until|finally|then)\b""",
         RegexOption.IGNORE_CASE
     )
     val ingredients = mutableListOf<String>()
@@ -1144,7 +1144,7 @@ private fun buildSocialRecipeDraft(cleanedText: String, source: String): Recipe 
         when {
             ingredientHeader.matches(line) -> section = "ingredients"
             methodHeader.matches(line) -> section = "instructions"
-            line.matches(Regex("""(?i)^(notes?|tips?|nutrition)\\s*:?$""")) -> section = "other"
+            line.matches(Regex("""(?i)^(notes?|tips?|nutrition)\s*:?$""")) -> section = "other"
             line.matches(Regex("""(?i)^(like|comment|share|follow|save this).*""")) -> Unit
             section == "ingredients" -> ingredients.add(line.trimStart('-', '•', '*', ' '))
             section == "instructions" -> instructions.add(line)
@@ -1161,8 +1161,8 @@ private fun buildSocialRecipeDraft(cleanedText: String, source: String): Recipe 
     return Recipe(
         title = title.ifBlank { "Recipe from " + sourceName },
         description = "Draft created from shared post text or screenshot OCR. Check quantities and cooking steps against the original before cooking.",
-        ingredients = ingredients.distinct().joinToString("\\n"),
-        instructions = if (instructions.isNotEmpty()) instructions.distinct().joinToString("\\n") else lines.joinToString("\\n"),
+        ingredients = ingredients.distinct().joinToString("\n"),
+        instructions = if (instructions.isNotEmpty()) instructions.distinct().joinToString("\n") else lines.joinToString("\n"),
         sourceUrl = source
     )
 }
@@ -1209,7 +1209,7 @@ private fun ImportDialog(
             ) {
                 Text(
                     if (socialSource == "Facebook")
-                        "Facebook often hides post content behind login or app-only pages, so automatic link import may fail. If the recipe is visible in the post, copy its text and paste it below. PantryPal will make an editable draft from the text."
+                        "Facebook may block direct link imports. Share the post here, paste its caption, or choose a screenshot and read its text into a recipe draft."
                     else if (socialSource != null)
                         "Instagram and TikTok often share only a link, and may block automatic recipe extraction. Try the link, or paste the post caption below to make a recipe draft."
                     else if (sharedText.isNotBlank())
@@ -1244,7 +1244,7 @@ private fun ImportDialog(
                                         val recognized = recognizer.process(input).await().text.trim()
                                         if (recognized.isBlank()) error = "No readable text found. Try a clearer screenshot."
                                         else {
-                                            caption = listOf(caption.trim(), recognized).filter { it.isNotBlank() }.distinct().joinToString("\\n\\n")
+                                            caption = listOf(caption.trim(), recognized).filter { it.isNotBlank() }.distinct().joinToString("\n\n")
                                             error = "Text read from image. Check it below, then make a recipe draft."
                                         }
                                     } finally { recognizer.close() }
