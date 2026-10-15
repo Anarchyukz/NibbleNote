@@ -1,4 +1,4 @@
-name: PantryPal Android build
+name: NibbleNote Android build
 
 on:
   push:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build:
-    name: Build PantryPal APK
+    name: Build NibbleNote APK
     runs-on: ubuntu-latest
     env:
       PANTRYPAL_KEYSTORE_BASE64: ${{ secrets.PANTRYPAL_KEYSTORE_BASE64 }}
@@ -46,19 +46,19 @@ jobs:
       - name: Build debug APK (until release signing is configured)
         if: ${{ env.PANTRYPAL_KEYSTORE_BASE64 == '' }}
         run: gradle --no-daemon assembleDebug
-      - name: Upload PantryPal release APK
+      - name: Upload NibbleNote release APK
         if: ${{ env.PANTRYPAL_KEYSTORE_BASE64 != '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: PantryPal-APK
+          name: NibbleNote-APK
           path: app/build/outputs/apk/release/app-release.apk
           if-no-files-found: error
           retention-days: 30
-      - name: Upload PantryPal APK
+      - name: Upload NibbleNote APK
         if: ${{ env.PANTRYPAL_KEYSTORE_BASE64 == '' }}
         uses: actions/upload-artifact@v4
         with:
-          name: PantryPal-APK
+          name: NibbleNote-APK
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
@@ -70,13 +70,13 @@ jobs:
         run: |
           if [ -n "$PANTRYPAL_KEYSTORE_BASE64" ]; then
             APK_PATH="app/build/outputs/apk/release/app-release.apk"
-            NOTES="PantryPal signed release APK."
+            NOTES="NibbleNote signed release APK."
           else
             APK_PATH="app/build/outputs/apk/debug/app-debug.apk"
-            NOTES="PantryPal debug-signed testing APK. Configure signing secrets for a signed release build."
+            NOTES="NibbleNote debug-signed testing APK. Configure signing secrets for a signed release build."
           fi
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" "$APK_PATH" --clobber
           else
-            gh release create "$GITHUB_REF_NAME" "$APK_PATH" --title "PantryPal $GITHUB_REF_NAME" --notes "$NOTES"
+            gh release create "$GITHUB_REF_NAME" "$APK_PATH" --title "NibbleNote $GITHUB_REF_NAME" --notes "$NOTES"
           fi
