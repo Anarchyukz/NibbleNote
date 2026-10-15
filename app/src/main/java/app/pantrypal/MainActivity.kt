@@ -1462,7 +1462,7 @@ private fun ImportDialog(
                     )
                     Text(
                         when (socialSource) {
-                            "Facebook" -> "Share the post to PantryPal, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
+                            "Facebook" -> "Share the post to NibbleNote, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
                             "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. NibbleNote cannot reliably read text baked into a video."
                             else -> "Paste recipe text or choose a screenshot and tap Read image text. Screenshot text is recognised on your device."
                         },
