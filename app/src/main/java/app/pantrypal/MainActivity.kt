@@ -1118,6 +1118,55 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
     )
 }
 
+private fun buildSocialRecipeDraft(cleanedText: String, source: String): Recipe {
+    val lines = cleanedText.lines()
+        .map { it.replace(Regex("""https?://\\S+""", RegexOption.IGNORE_CASE), "").trim() }
+        .filter { it.isNotBlank() }
+    val ingredientHeader = Regex("""^(ingredients?|what you('ll| will) need|you will need)\\s*:?$""", RegexOption.IGNORE_CASE)
+    val methodHeader = Regex("""^(method|directions|instructions|steps|preparation|how to make)\\s*:?$""", RegexOption.IGNORE_CASE)
+    val title = lines.firstOrNull { line ->
+        line.length in 4..90 && !line.startsWith("#") &&
+            !ingredientHeader.matches(line) && !methodHeader.matches(line) &&
+            !line.matches(Regex("""(?i)^(like|comment|share|follow|ingredients|method|instructions)\\W*$"""))
+    }?.trim('#', '*', ' ', '-', '•')?.take(80).orEmpty()
+    val quantityOrIngredient = Regex(
+        """^(?:[-•*]\\s*)?(?:(?:\\d+(?:\\s+\\d+/\\d+|[./]\\d+)?|\\d+/\\d+)\\s*)?(?:g|kg|mg|ml|l|litres?|liters?|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|lb|lbs|cloves?|packets?|sachets?|slices?|cans?|tins?|pinches?|handfuls?|sprigs?|bunches?|large|medium|small)\\b|^(?:[-•*]\\s*)?\\d+(?:[./]\\d+)?\\s+\\w+""",
+        RegexOption.IGNORE_CASE
+    )
+    val step = Regex(
+        """^(?:(?:step\\s*)?\\d+[.)]?\\s+|[-•*]\\s+)?(?:preheat|heat|mix|stir|add|chop|slice|pour|bake|fry|boil|simmer|cook|serve|combine|place|whisk|blend|season|spread|drain|mash|knead|roast|grill|fold|beat|bring|leave|allow|transfer|remove|cover|reduce|meanwhile|once|when|until|finally|then)\\b""",
+        RegexOption.IGNORE_CASE
+    )
+    val ingredients = mutableListOf<String>()
+    val instructions = mutableListOf<String>()
+    var section = ""
+    lines.forEach { line ->
+        when {
+            ingredientHeader.matches(line) -> section = "ingredients"
+            methodHeader.matches(line) -> section = "instructions"
+            line.matches(Regex("""(?i)^(notes?|tips?|nutrition)\\s*:?$""")) -> section = "other"
+            line.matches(Regex("""(?i)^(like|comment|share|follow|save this).*""")) -> Unit
+            section == "ingredients" -> ingredients.add(line.trimStart('-', '•', '*', ' '))
+            section == "instructions" -> instructions.add(line)
+            quantityOrIngredient.containsMatchIn(line) -> ingredients.add(line.trimStart('-', '•', '*', ' '))
+            step.containsMatchIn(line) -> instructions.add(line)
+        }
+    }
+    val sourceName = when {
+        source.contains("facebook.com", true) || source.contains("fb.watch", true) -> "Facebook"
+        source.contains("instagram.com", true) -> "Instagram"
+        source.contains("tiktok.com", true) -> "TikTok"
+        else -> "shared post"
+    }
+    return Recipe(
+        title = title.ifBlank { "Recipe from " + sourceName },
+        description = "Draft created from shared post text or screenshot OCR. Check quantities and cooking steps against the original before cooking.",
+        ingredients = ingredients.distinct().joinToString("\\n"),
+        instructions = if (instructions.isNotEmpty()) instructions.distinct().joinToString("\\n") else lines.joinToString("\\n"),
+        sourceUrl = source
+    )
+}
+
 @Composable
 private fun ImportDialog(
     initialAddress: String = "",
@@ -1176,7 +1225,42 @@ private fun ImportDialog(
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (sharedText.isNotBlank() || socialSource != null) {
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedButton(
+                        onClick = { recipeImagePicker.launch(androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (selectedRecipeImage == null) "Choose screenshot" else "Change screenshot") }
+                    Button(
+                        enabled = selectedRecipeImage != null && !readingImage,
+                        onClick = {
+                            val imageUri = selectedRecipeImage ?: return@Button
+                            readingImage = true
+                            error = null
+                            scope.launch {
+                                try {
+                                    val input = InputImage.fromFilePath(context, imageUri)
+                                    val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                                    try {
+                                        val recognized = recognizer.process(input).await().text.trim()
+                                        if (recognized.isBlank()) error = "No readable text found. Try a clearer screenshot."
+                                        else {
+                                            caption = listOf(caption.trim(), recognized).filter { it.isNotBlank() }.distinct().joinToString("\\n\\n")
+                                            error = "Text read from image. Check it below, then make a recipe draft."
+                                        }
+                                    } finally { recognizer.close() }
+                                } catch (e: Exception) {
+                                    error = "Couldn't read that image. Try another screenshot. " + (e.message ?: "")
+                                } finally { readingImage = false }
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    ) { Text(if (readingImage) "Reading…" else "Read image text") }
+                }
+                selectedRecipeImage?.let { imageUri ->
+                    AsyncImage(model = imageUri, contentDescription = "Recipe screenshot", contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().heightIn(max = 180.dp).clip(RoundedCornerShape(12.dp)))
+                }
+                if (sharedText.isNotBlank() || socialSource != null || selectedRecipeImage != null) {
                     OutlinedTextField(
                         value = caption,
                         onValueChange = { caption = it; error = null },
@@ -1188,9 +1272,9 @@ private fun ImportDialog(
                     )
                     Text(
                         when (socialSource) {
-                            "Facebook" -> "Tip: open the Facebook post, tap its menu and choose Copy text or Copy link where available. Paste the actual recipe text here; a link alone may not contain the recipe. Photos with text are not read automatically."
+                            "Facebook" -> "Share the post to PantryPal, paste its caption, or choose a screenshot and tap Read image text. Screenshot text is recognised on your device; video audio transcription is not included yet."
                             "Instagram", "TikTok" -> "Open the post, copy its caption or recipe text, then paste it here. PantryPal cannot reliably read text baked into a video."
-                            else -> "Paste the recipe text here. Photos and text baked into videos are not read automatically."
+                            else -> "Paste recipe text or choose a screenshot and tap Read image text. Screenshot text is recognised on your device."
                         },
                         style = MaterialTheme.typography.bodySmall
                     )
@@ -1198,43 +1282,11 @@ private fun ImportDialog(
                         enabled = caption.isNotBlank(),
                         onClick = {
                             val cleaned = caption.trim()
-                            val titleCandidate = cleaned.lineSequence()
-                                .map { it.trim().trim('-', '•', '|', '#') }
-                                .firstOrNull { it.isNotBlank() && !it.startsWith("http", true) }
-                                ?.take(80)
                             val source = address.ifBlank {
-                                Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+                                Regex("https?://\\\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
                             }
-                            val sourceName = when {
-                                source.contains("facebook.com", true) || source.contains("fb.watch", true) -> "Facebook"
-                                source.contains("instagram.com", true) -> "Instagram"
-                                source.contains("tiktok.com", true) -> "TikTok"
-                                else -> "shared post"
-                            }
-                            val recipeLines = cleaned.lines().map { it.trim() }
-                                .filter { it.isNotBlank() && !it.startsWith("http", true) }
-                            val ingredientPattern = Regex(
-                                """^(?:[-•*]\\s*)?(?:\\d+(?:[./]\\d+)?\\s*)?(?:g|kg|ml|l|tsp|tbsp|teaspoons?|tablespoons?|cups?|oz|lb|cloves?|packets?|slices?|cans?|pinch(?:es)?|handfuls?)\\b""",
-                                RegexOption.IGNORE_CASE
-                            )
-                            val stepPattern = Regex(
-                                """^(?:(?:step\\s*)?\\d+[.)]?\\s+|[-•*]\\s+)?(?:preheat|heat|mix|stir|add|chop|slice|pour|bake|fry|boil|simmer|cook|serve|combine|place|whisk|blend|season|spread|drain|cook|then\\b)""",
-                                RegexOption.IGNORE_CASE
-                            )
-                            val ingredients = recipeLines.filter { ingredientPattern.containsMatchIn(it) || it.startsWith("ingredient", true) }
-                            val steps = recipeLines.filter { stepPattern.containsMatchIn(it) }
-                            val extractedIngredients = ingredients.joinToString("\\n")
-                            val extractedSteps = steps.joinToString("\\n")
-                            onImport(
-                                Recipe(
-                                    title = titleCandidate?.takeIf { it.isNotBlank() } ?: "Recipe from $sourceName",
-                                    description = "Draft from social post text. Check the extracted ingredients, quantities and cooking steps against the original post.",
-                                    ingredients = extractedIngredients,
-                                    instructions = if (extractedSteps.isNotBlank()) extractedSteps else cleaned,
-                                    sourceUrl = source
-                                )
-                            )
-                        },
+                            onImport(buildSocialRecipeDraft(cleaned, source))
+                        }
                         modifier = Modifier.fillMaxWidth()
                     ) { Text("Make draft from caption / text") }
                 }
