@@ -363,20 +363,48 @@ private class RecipeWebSearch {
                     .sortedWith(compareBy<Triple<RecipeSearchResult, Int, Int>> { it.second }.thenBy { it.third })
                     .map { it.first }.take(12).toList()
                 if (parsed.isNotEmpty()) {
-                    // Keep only pages with Recipe structured data: these are the pages PantryPal can actually import.
-                    // Validate a small batch concurrently so search stays responsive.
+                    // Prefer known cooking sites and likely recipe URLs, but don't require structured data:
+                    // many legitimate recipe pages omit JSON-LD or block direct validation requests.
+                    val recipeSites = listOf(
+                        "bbcgoodfood.com", "goodhousekeeping.com", "allrecipes.com", "simplyrecipes.com",
+                        "recipetineats.com", "delish.com", "taste.com.au", "thekitchn.com", "food.com",
+                        "foodnetwork.com", "jamieoliver.com", "bbc.co.uk/food", "mob.co.uk",
+                        "budgetbytes.com", "loveandlemons.com", "cookieandkate.com", "seriouseats.com",
+                        "sallysbakingaddiction.com", "waitrose.com", "tesco.com"
+                    )
+                    fun likelyRecipe(result: RecipeSearchResult): Boolean {
+                        val url = result.url.lowercase()
+                        val title = result.title.lowercase()
+                        val host = try { URL(url).host.removePrefix("www.") } catch (_: Exception) { "" }
+                        val blockedHosts = listOf("youtube.com", "youtu.be", "facebook.com", "instagram.com",
+                            "pinterest.com", "tiktok.com", "reddit.com")
+                        if (blockedHosts.any { host == it || host.endsWith(".$it") }) return false
+                        if (listOf("news", "newsletter", "podcast", "restaurant review", "product review",
+                                "best restaurants", "meal kit", "kitchen equipment").any { it in title }) return false
+                        val knownSite = recipeSites.any { host == it || host.endsWith(".$it") || url.contains(it) }
+                        val recipePath = listOf("/recipe", "/recipes/", "/food/recipes", "/dish/")
+                            .any { it in url }
+                        val recipeTitle = listOf("recipe", "how to make", "ingredients", "curry", "soup",
+                            "pasta", "chicken", "cake", "bread", "salad", "stew", "cookies", "brownies")
+                            .any { it in title }
+                        return knownSite || recipePath || recipeTitle
+                    }
+                    val ranked = parsed.filter(::likelyRecipe)
+                    val candidates = (ranked + parsed.filterNot(ranked::contains))
+                        .distinctBy { it.url }.take(12)
                     val checked = coroutineScope {
-                        parsed.take(8).mapIndexed { index, result ->
+                        candidates.take(8).mapIndexed { index, result ->
                             async(Dispatchers.IO) {
                                 if (hasRecipeStructuredData(result.url)) index to result else null
                             }
                         }.awaitAll()
                     }
-                    val recipePages = checked.filterNotNull().sortedBy { it.first }
-                        .map { it.second }.take(8)
+                    val validated = checked.filterNotNull().sortedBy { it.first }.map { it.second }
+                    val recipePages = (validated + candidates.filterNot(validated::contains))
+                        .distinctBy { it.url }.take(8)
                     if (recipePages.isNotEmpty()) return@withContext recipePages
                     lastError = IllegalStateException(
-                        "Search results were found, but they did not contain importable recipe cards. Try a more specific dish or ingredient."
+                        "No useful recipe links were found. Try a dish or ingredient, or import a recipe URL directly."
                     )
                 } else {
                     lastError = IllegalStateException("Search provider responded, but its links could not be identified.")
