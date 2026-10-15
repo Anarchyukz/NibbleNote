@@ -1818,15 +1818,18 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
         properties = DialogProperties(usePlatformDefaultWidth = false)
     ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(0.96f).widthIn(max = 560.dp),
+            // Use the available screen height rather than wrap-content measurement.
+            // On shorter phones, a wrap-content dialog lets the action bar fall below
+            // the visible screen even when the recipe body itself is scrollable.
+            modifier = Modifier.fillMaxSize().padding(12.dp),
             shape = RoundedCornerShape(28.dp),
             color = androidx.compose.ui.graphics.Color(0xFFFFFEFA),
             tonalElevation = 8.dp,
             shadowElevation = 16.dp
         ) {
-            Column {
+            Column(Modifier.fillMaxSize()) {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(190.dp)
+                    modifier = Modifier.fillMaxWidth().height(150.dp)
                         .background(androidx.compose.ui.graphics.Color(0xFFFFF1D6)),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1891,8 +1894,9 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
                 }
 
                 Column(
-                    modifier = Modifier.fillMaxWidth()
-                        .heightIn(max = 560.dp)
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 20.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -2020,8 +2024,12 @@ private fun RecipeDetailDialog(recipe: Recipe, onDismiss: () -> Unit, onImportAn
                 }
 
                 HorizontalDivider(color = androidx.compose.ui.graphics.Color(0xFFE7E5DF))
+                HorizontalDivider(color = androidx.compose.ui.graphics.Color(0xFFE7E5DF))
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 8.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
