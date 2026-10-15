@@ -309,10 +309,13 @@ private class RecipeWebSearch {
      * These photos are deliberately not cached into the local recipe data.
      */
     suspend fun fetchRecipeCardImage(recipe: Recipe): String? = withContext(Dispatchers.IO) {
-        if (recipe.sourceUrl.isNotBlank()) return@withContext fetchImage(recipe.sourceUrl)
+        if (!recipe.id.startsWith("slowcooker-curated-") && recipe.sourceUrl.isNotBlank()) {
+            return@withContext fetchImage(recipe.sourceUrl)
+        }
 
         val baseTitle = recipe.title
             .removePrefix("Slow cooker ")
+            .removePrefix("Slow-cooker ")
             .substringBefore(" - ")
             .trim()
         if (baseTitle.isBlank()) return@withContext null
