@@ -810,20 +810,22 @@ private fun PantryPalApp(
                                 style = MaterialTheme.typography.bodySmall, color = androidx.compose.ui.graphics.Color(0xFF6B7280))
                         }
                     }
-                    OutlinedTextField(
-                        value = browseFilter,
-                        onValueChange = { browseFilter = it },
-                        placeholder = { Text("Find a cuisine, category or website") },
-                        leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(15.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PantryOrange,
-                            unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
-                            focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                    item {
+                        OutlinedTextField(
+                            value = browseFilter,
+                            onValueChange = { browseFilter = it },
+                            placeholder = { Text("Find a cuisine, category or website") },
+                            leadingIcon = { Text("⌕", color = PantryInk, style = MaterialTheme.typography.titleLarge) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(15.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedBorderColor = PantryOrange,
+                                unfocusedContainerColor = androidx.compose.ui.graphics.Color.White,
+                                focusedContainerColor = androidx.compose.ui.graphics.Color.White
+                            )
                         )
-                    )
+                    }
                     items(
                         browseCategories.filter { category ->
                             browseFilter.isBlank() ||
