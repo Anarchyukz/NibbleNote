@@ -612,7 +612,7 @@ class MainActivity : ComponentActivity() {
         val sharedUrl = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
         @Suppress("DEPRECATION")
         val sharedImage = sharedIntent?.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
-            ?.takeIf { sharedIntent.type?.startsWith("image/") == true }
+            ?.takeIf { sharedIntent?.type?.startsWith("image/") == true }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
                 PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
