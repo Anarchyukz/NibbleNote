@@ -1,7 +1,7 @@
 package app.pantrypal
 
-/** Fifty distinct slow-cooker dishes replacing generated seasoning variants.
- * These are concise original adaptations, with links to publisher recipe collections/pages.
+/** Fifty distinct slow-cooker dishes with measured ingredients and step-by-step methods.
+ * Recipes are practical adaptations; publisher links are supplied where a matching reference recipe exists.
  */
 internal object SlowCookerRecipes {
  private data class E(val title:String,val ingredients:String,val steps:String,val source:String,val cook:String="6–8 hours on LOW",val prep:String="15 minutes")
