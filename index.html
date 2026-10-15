@@ -1,51 +1,254 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#f97316">
-  <meta name="description" content="NibbleNote is a free Android recipe organiser. Save recipes, import from supported websites and keep your cooking ideas together.">
-  <title>NibbleNote — Your recipes, neatly kept</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#f59e0b">
+  <title>NibbleNote — Your recipes, organised</title>
+  <meta name="description" content="NibbleNote is a free, open-source Android recipe app for importing recipes, planning meals and creating shopping lists.">
   <style>
-    :root{color-scheme:dark;--bg:#101114;--panel:#191b20;--text:#f7f7f8;--muted:#b7bbc4;--accent:#fb923c;--line:#30333a}
-    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:radial-gradient(ellipse at 50% -10%,#3b2418 0,transparent 48%),var(--bg);color:var(--text);font:16px/1.6 system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-    a{color:inherit} .wrap{width:min(1080px,calc(100% - 36px));margin:auto}
-    header{padding:24px 0;border-bottom:1px solid #ffffff12}.nav{display:flex;align-items:center;justify-content:space-between;gap:18px}.brand{font-weight:850;font-size:1.3rem;letter-spacing:-.04em;text-decoration:none}.brand span{color:var(--accent)}.navlinks{display:flex;gap:18px;flex-wrap:wrap}.navlinks a{color:var(--muted);text-decoration:none;font-size:.92rem}
-    .hero{padding:82px 0 64px;text-align:center}.eyebrow{display:inline-block;padding:6px 12px;border:1px solid #fb923c55;border-radius:99px;color:#fdba74;font-size:.84rem;font-weight:700;background:#fb923c12}.hero h1{font-size:clamp(2.7rem,8vw,5.4rem);line-height:1.02;letter-spacing:-.065em;margin:22px auto 18px;max-width:850px}.hero h1 em{font-style:normal;color:var(--accent)}.hero p{max-width:650px;margin:0 auto;color:var(--muted);font-size:1.1rem}
-    .actions{display:flex;justify-content:center;gap:12px;flex-wrap:wrap;margin:30px 0 18px}.btn{display:inline-flex;align-items:center;justify-content:center;min-height:48px;padding:12px 20px;border-radius:13px;text-decoration:none;font-weight:750;border:1px solid var(--line);background:var(--panel)}.btn.primary{background:var(--accent);border-color:var(--accent);color:#211208}.small{font-size:.88rem;color:var(--muted)}
-    .features{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;padding:18px 0 70px}.feature{padding:24px;background:linear-gradient(145deg,#202228,#17181d);border:1px solid var(--line);border-radius:20px}.ico{font-size:1.7rem}.feature h2{font-size:1.08rem;margin:12px 0 6px}.feature p{color:var(--muted);margin:0;font-size:.95rem}
-    .about{padding:42px 0 70px;border-top:1px solid #ffffff12}.about h2{font-size:clamp(1.8rem,4vw,2.5rem);letter-spacing:-.04em;margin:0 0 12px}.about p{max-width:760px;color:var(--muted)}.note{padding:16px 18px;border:1px solid var(--line);border-radius:14px;background:#ffffff05;color:var(--muted);font-size:.92rem}
-    footer{border-top:1px solid #ffffff12;padding:24px 0 34px;color:var(--muted);font-size:.9rem}.foot{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
-    @media(max-width:700px){.hero{padding:58px 0 42px}.features{grid-template-columns:1fr;padding-bottom:45px}.nav{align-items:flex-start;flex-direction:column}.navlinks{gap:14px}.feature{padding:20px}}
+    :root {
+      --bg: #0b0f17;
+      --card-bg: rgba(22, 27, 38, 0.7);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --primary: #f59e0b;
+      --primary-hover: #d97706;
+      --kofi: #ff5e5b;
+      --kofi-hover: #e04845;
+      --text: #f3f4f6;
+      --muted: #9ca3af;
+      --font: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      overflow-x: hidden;
+      padding-bottom: 60px;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      top: -20%;
+      left: -10%;
+      width: 600px;
+      height: 600px;
+      background: radial-gradient(circle, rgba(245, 158, 11, 0.12) 0%, rgba(0,0,0,0) 70%);
+      pointer-events: none;
+      z-index: -1;
+    }
+
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 32px 0;
+    }
+
+    .logo {
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .logo span { color: var(--primary); }
+    .nav-links { display: flex; gap: 16px; }
+
+    .hero {
+      padding: 60px 0 40px;
+      text-align: center;
+      max-width: 780px;
+      margin: 0 auto;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 6px 14px;
+      border-radius: 20px;
+      background: rgba(245, 158, 11, 0.1);
+      border: 1px solid rgba(245, 158, 11, 0.25);
+      color: var(--primary);
+      font-size: 0.85rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 24px;
+    }
+
+    h1 {
+      font-size: clamp(2.8rem, 6vw, 4.2rem);
+      font-weight: 800;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      margin-bottom: 20px;
+    }
+
+    h1 span {
+      background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .hero-desc {
+      font-size: 1.2rem;
+      color: var(--muted);
+      margin-bottom: 36px;
+      max-width: 600px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .cta-group { display: flex; flex-wrap: wrap; justify-content: center; gap: 14px; }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 14px 26px;
+      border-radius: 12px;
+      font-weight: 700;
+      font-size: 0.95rem;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--primary);
+      color: #0b0f17;
+      box-shadow: 0 4px 20px rgba(245, 158, 11, 0.25);
+    }
+
+    .btn-primary:hover { background: var(--primary-hover); transform: translateY(-2px); }
+
+    .btn-secondary {
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text);
+      border: 1px solid var(--card-border);
+    }
+
+    .btn-secondary:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    .btn-kofi {
+      background: var(--kofi);
+      color: #ffffff;
+      box-shadow: 0 4px 20px rgba(255, 94, 91, 0.25);
+    }
+
+    .btn-kofi:hover { background: var(--kofi-hover); transform: translateY(-2px); }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin: 60px 0;
+    }
+
+    .feature-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      backdrop-filter: blur(12px);
+      border-radius: 18px;
+      padding: 28px 24px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+
+    .feature-card:hover { transform: translateY(-4px); border-color: rgba(245, 158, 11, 0.3); }
+    .icon { font-size: 2rem; margin-bottom: 16px; }
+    .feature-card h3 { font-size: 1.2rem; margin-bottom: 8px; font-weight: 700; }
+    .feature-card p { color: var(--muted); font-size: 0.95rem; line-height: 1.5; }
+    .section-title { font-size: 1.8rem; font-weight: 800; margin: 50px 0 20px; letter-spacing: -0.5px; }
+    .footer-text { color: var(--muted); font-size: 0.95rem; max-width: 600px; margin-bottom: 24px; }
+
+    footer {
+      border-top: 1px solid var(--card-border);
+      margin-top: 80px;
+      padding-top: 32px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    footer a { color: var(--primary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    @media (max-width: 600px) {
+      .hero { padding: 40px 0 20px; }
+      .cta-group { flex-direction: column; }
+      .btn { width: 100%; }
+      footer { flex-direction: column; gap: 12px; text-align: center; }
+    }
   </style>
 </head>
 <body>
-<header><div class="wrap nav">
-  <a class="brand" href="#" aria-label="NibbleNote home">Nibble<span>Note</span></a>
-  <nav class="navlinks" aria-label="Main navigation"><a href="#features">Features</a><a href="#about">About</a><a href="https://github.com/Anarchyukz/NibbleNote">Source code</a></nav>
-</div></header>
-<main>
-  <section class="hero wrap">
-    <span class="eyebrow">Free · Open source · Android</span>
-    <h1>Your recipes,<br><em>neatly kept.</em></h1>
-    <p>Keep your favourite meals in one place. Save recipes, import ingredients and instructions from supported websites, and browse ideas for your next meal — without needing an account.</p>
-    <div class="actions">
-      <a class="btn primary" href="https://github.com/Anarchyukz/NibbleNote/releases">Get NibbleNote</a>
-      <a class="btn" href="https://github.com/Anarchyukz/NibbleNote">Explore the project</a>
-    </div>
-    <div class="small">Free to use. Donations are optional and never required to unlock features.</div>
-  </section>
-  <section class="wrap features" id="features">
-    <article class="feature"><div class="ico" aria-hidden="true">📚</div><h2>Your own recipe collection</h2><p>Add, edit, search and organise recipes on your device. Your collection stays local to your phone.</p></article>
-    <article class="feature"><div class="ico" aria-hidden="true">🍅</div><h2>Import from websites</h2><p>Bring in recipe details from supported pages, including ingredients and cooking instructions. Website compatibility varies.</p></article>
-    <article class="feature"><div class="ico" aria-hidden="true">🥘</div><h2>Slow-cooker inspiration</h2><p>Browse a collection of slow-cooker ideas with ingredient quantities and practical cooking steps.</p></article>
-  </section>
-  <section class="about"><div class="wrap" id="about">
-    <h2>Simple, useful, and yours.</h2>
-    <p>NibbleNote is an open-source Android recipe organiser built with Kotlin and Jetpack Compose. It is designed to keep everyday cooking ideas easy to find, with local-first storage and no account to create.</p>
-    <div class="note">Recipe imports depend on what a website makes available and whether it allows automated access. Check imported quantities and instructions before cooking, especially where allergies or food safety are involved.</div>
-  </div></section>
-</main>
-<footer><div class="wrap foot"><span>© NibbleNote · Free and open source</span><span><a href="https://github.com/Anarchyukz/NibbleNote">GitHub repository</a> · MIT licence</span></div></footer>
+  <div class="container">
+    <header>
+      <div class="logo">🍳 Nibble<span>Note</span></div>
+      <div class="nav-links">
+        <a class="btn btn-secondary" href="https://github.com/Anarchyukz/NibbleNote" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; font-size: 0.85rem;">GitHub</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <span class="badge">Your Kitchen, Better Organised</span>
+        <h1>Less searching.<br><span>More cooking.</span></h1>
+        <p class="hero-desc">
+          Keep your favourite recipes together, import ingredients and instructions from supported websites, and make it easier to decide what to cook.
+        </p>
+        <div class="cta-group">
+          <a class="btn btn-primary" href="https://github.com/Anarchyukz/NibbleNote/releases" target="_blank" rel="noopener noreferrer">Get NibbleNote</a>
+          <a class="btn btn-secondary" href="https://github.com/Anarchyukz/NibbleNote" target="_blank" rel="noopener noreferrer">View Source Code</a>
+          <a class="btn btn-kofi" href="https://ko-fi.com/Anarchyuk" target="_blank" rel="noopener noreferrer">☕ Support on Ko-fi</a>
+        </div>
+      </section>
+
+      <h2 class="section-title">Everything for your kitchen</h2>
+      <section class="features-grid">
+        <div class="feature-card">
+          <div><div class="icon">📖</div><h3>Your recipes</h3><p>Keep your favourite recipes organised, searchable, and accessible in one place.</p></div>
+        </div>
+        <div class="feature-card">
+          <div><div class="icon">🔎</div><h3>Recipe importing</h3><p>Import recipe details, ingredients and instructions from supported recipe websites.</p></div>
+        </div>
+        <div class="feature-card">
+          <div><div class="icon">🥘</div><h3>Slow-cooker recipes</h3><p>Browse a collection of slow-cooker ideas with measured ingredients and practical cooking steps.</p></div>
+        </div>
+        <div class="feature-card" style="border-color: rgba(255, 94, 91, 0.3);">
+          <div><div class="icon">❤️</div><h3>Support the project</h3><p>NibbleNote is free and open source. Donations help support ongoing development.</p></div>
+          <a class="btn btn-kofi" href="https://ko-fi.com/Anarchyuk" target="_blank" rel="noopener noreferrer" style="margin-top: 20px; font-size: 0.85rem; padding: 10px;">Donate on Ko-fi</a>
+        </div>
+      </section>
+
+      <h2 class="section-title">Free. Open source. Community supported.</h2>
+      <p class="footer-text">
+        NibbleNote is released under the MIT licence. Explore the code, report issues, request features, or support development on Ko-fi.
+      </p>
+    </main>
+
+    <footer>
+      <div>NibbleNote · Open-source Android app · MIT Licence</div>
+      <div>Created by <a href="https://github.com/Anarchyukz" target="_blank" rel="noopener noreferrer">Anarchyukz</a></div>
+    </footer>
+  </div>
 </body>
 </html>
