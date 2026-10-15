@@ -40,6 +40,10 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.tasks.await
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayInputStream
@@ -603,15 +607,18 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         store = RecipeStore(this)
-        val sharedText = intent?.takeIf { it.action == Intent.ACTION_SEND }
-            ?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
+        val sharedIntent = intent?.takeIf { it.action == Intent.ACTION_SEND }
+        val sharedText = sharedIntent?.getCharSequenceExtra(Intent.EXTRA_TEXT)?.toString().orEmpty()
         val sharedUrl = Regex("https?://\\S+", RegexOption.IGNORE_CASE).find(sharedText)?.value.orEmpty()
+        @Suppress("DEPRECATION")
+        val sharedImage = sharedIntent?.getParcelableExtra<Uri>(Intent.EXTRA_STREAM)
+            ?.takeIf { sharedIntent.type?.startsWith("image/") == true }
         setContent {
             MaterialTheme(colorScheme = lightColorScheme(primary = PantryOrange, onPrimary = PantryInk)) {
                 PantryPalApp(store.load(), store::save, store.loadPlan(), store::savePlan,
                     onBackup = { createBackup.launch("PantryPal-backup.json") },
                     onRestore = { openBackup.launch(arrayOf("application/json", "text/json", "text/plain")) },
-                    initialSharedText = sharedText, initialSharedUrl = sharedUrl)
+                    initialSharedText = sharedText, initialSharedUrl = sharedUrl, initialSharedImage = sharedImage)
             }
         }
     }
@@ -623,7 +630,7 @@ private fun PantryPalApp(
     initialRecipes: List<Recipe>, persist: (List<Recipe>) -> Unit,
     initialPlan: List<PlannedMeal>, persistPlan: (List<PlannedMeal>) -> Unit,
     onBackup: () -> Unit, onRestore: () -> Unit,
-    initialSharedText: String = "", initialSharedUrl: String = ""
+    initialSharedText: String = "", initialSharedUrl: String = "", initialSharedImage: Uri? = null
 ) {
     var recipes by remember { mutableStateOf(initialRecipes) }
     var mealPlan by remember { mutableStateOf(initialPlan) }
@@ -632,7 +639,7 @@ private fun PantryPalApp(
     var search by remember { mutableStateOf("") }
     var editing by remember { mutableStateOf<Recipe?>(null) }
     var showForm by remember { mutableStateOf(false) }
-    var showImport by remember { mutableStateOf(initialSharedText.isNotBlank()) }
+    var showImport by remember { mutableStateOf(initialSharedText.isNotBlank() || initialSharedImage != null) }
     var showRecipeSearch by remember { mutableStateOf(false) }
     var selectedBrowseSite by remember { mutableStateOf<BrowseSite?>(null) }
     var browseThemeQuery by remember { mutableStateOf("") }
@@ -946,6 +953,7 @@ private fun PantryPalApp(
     if (showImport) ImportDialog(
         initialAddress = initialSharedUrl,
         sharedText = initialSharedText,
+        sharedImageUri = initialSharedImage,
         onDismiss = { showImport = false },
         onManual = { showImport = false; editing = null; showForm = true },
         onImport = { recipe ->
@@ -1114,6 +1122,7 @@ private fun RecipeFormDialog(recipe: Recipe?, onDismiss: () -> Unit, onSave: (Re
 private fun ImportDialog(
     initialAddress: String = "",
     sharedText: String = "",
+    sharedImageUri: Uri? = null,
     onDismiss: () -> Unit,
     onManual: () -> Unit,
     onImport: (Recipe) -> Unit
@@ -1125,9 +1134,15 @@ private fun ImportDialog(
 
     var address by remember { mutableStateOf(initialAddress) }
     var caption by remember { mutableStateOf(removeLinks(sharedText)) }
+    var selectedRecipeImage by remember { mutableStateOf(sharedImageUri) }
+    var readingImage by remember { mutableStateOf(false) }
     var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val recipeImagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+        if (uri != null) { selectedRecipeImage = uri; error = null }
+    }
     val socialSource = when {
         address.contains("facebook.com", true) || address.contains("fb.watch", true) ||
             sharedText.contains("facebook.com", true) || sharedText.contains("fb.watch", true) -> "Facebook"
