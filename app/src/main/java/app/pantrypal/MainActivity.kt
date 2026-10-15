@@ -315,6 +315,10 @@ private class RecipeWebSearch {
             .substringBefore(" - ")
             .trim()
         if (baseTitle.isBlank()) return@withContext null
+        if (!recipe.id.startsWith("slowcooker-curated-") && recipe.sourceUrl.isNotBlank()) {
+            val pageImage = fetchImage(recipe.sourceUrl)
+            if (!pageImage.isNullOrBlank()) return@withContext pageImage
+        }
 
         // Prefer an actual matching dish photo from Wikimedia Commons (openly licensed media).
         try {
