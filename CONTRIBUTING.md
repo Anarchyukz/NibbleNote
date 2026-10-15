@@ -1,6 +1,6 @@
-# Contributing to PantryPal
+# Contributing to NibbleNote
 
-Thanks for helping improve PantryPal.
+Thanks for helping improve NibbleNote.
 
 1. Open an issue describing bugs or larger features before starting.
 2. Keep the app usable offline except when a user explicitly imports a webpage.
