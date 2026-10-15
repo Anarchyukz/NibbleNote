@@ -850,7 +850,7 @@ private fun PantryPalApp(
                         Text(
                             when (section) {
                                 "My recipes" -> "My recipes (${recipes.size})"
-                                "Slow cooker" -> "Slow cooker (\${slowCookerRecipes.size})"
+                                "Slow cooker" -> "Slow cooker (${slowCookerRecipes.size})"
                                 else -> "Browse sites"
                             },
                             fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
@@ -964,7 +964,7 @@ private fun PantryPalApp(
                 } else if (homeSection == "Slow cooker") {
                     item {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp, bottom = 6.dp)) {
-                            Text("\${slowCookerRecipes.size} RECIPES INCLUDED", style = MaterialTheme.typography.labelMedium,
+                            Text("${slowCookerRecipes.size} RECIPES INCLUDED", style = MaterialTheme.typography.labelMedium,
                                 color = PantryOrange, fontWeight = FontWeight.ExtraBold, letterSpacing = 1.1.sp)
                             Text("Slow cooker favourites", style = MaterialTheme.typography.titleLarge,
                                 color = PantryInk, fontWeight = FontWeight.ExtraBold)
